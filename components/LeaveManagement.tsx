@@ -274,7 +274,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({ user }) => {
               
               {isExtendedSickLeave && (
                 <div className="mt-4 animate-in slide-in-from-right-4">
-                  <label className="block text-xs font-bold text-rose-600 uppercase mb-2">Medical Report Required (>3 Days)</label>
+                  <label className="block text-xs font-bold text-rose-600 uppercase mb-2">{"Medical Report Required (>3 Days)"}</label>
                   <div className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all ${medicalCertificate ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200 hover:border-rose-300'}`}>
                     <input 
                       type="file" 
