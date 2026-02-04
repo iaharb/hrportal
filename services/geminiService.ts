@@ -1,8 +1,9 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Initialize the GoogleGenAI client using the API key directly from environment variables as per guidelines
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize the GoogleGenAI client using the API key directly from environment variables
+// Using a safety check for process.env
+const apiKey = typeof process !== 'undefined' && process.env ? process.env.API_KEY : '';
+const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
 export const getKuwaitizationInsights = async (employeeData: string) => {
   const prompt = `

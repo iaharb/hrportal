@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -19,8 +18,8 @@ const App: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Set default view based on role after login
   useEffect(() => {
     if (currentUser) {
       if (currentUser.role === 'Employee') {
@@ -58,8 +57,6 @@ const App: React.FC = () => {
         return <ComplianceView key={`comp-${refreshKey}`} />;
       case View.Profile:
         return <ProfileView user={currentUser} key={`profile-${refreshKey}`} />;
-      case View.Dashboard:
-        return <Dashboard user={currentUser} key={`dash-${refreshKey}`} />;
       case View.Leaves:
         return <LeaveManagement user={currentUser} key={`leaves-${refreshKey}`} />;
       default:
@@ -74,7 +71,7 @@ const App: React.FC = () => {
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
-    <div className="flex min-h-screen bg-slate-50 selection:bg-emerald-100">
+    <div className="flex min-h-screen bg-[#F8FAFC]">
       <Sidebar 
         currentView={currentView} 
         setView={setView} 
@@ -82,32 +79,29 @@ const App: React.FC = () => {
         onLogout={() => setCurrentUser(null)}
       />
       
-      <main className="flex-1 min-w-0">
-        <div className="h-full p-10 max-w-[1400px] mx-auto">
-          {/* Top Bar */}
-          <div className="flex items-center justify-between mb-12">
-            <div>
-              <nav className="flex items-center gap-3 text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">
-                <span>System</span>
-                <span className="text-slate-300">/</span>
-                <span className="text-emerald-600">{currentView}</span>
-              </nav>
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-                {currentView === View.Dashboard ? (currentUser.role === 'Manager' ? 'Department Hub' : 'Kuwaitization Dashboard') : 
-                 currentView === View.Profile ? 'Personal Workspace' :
-                 currentView === View.Leaves ? 'Leave Hub' :
-                 currentView.replace('-', ' ')}
-              </h1>
+      <main className="flex-1 min-w-0 h-screen overflow-y-auto relative">
+        {/* Top Floating Command Palette */}
+        <header className="sticky top-0 z-40 px-8 py-6 flex items-center justify-between pointer-events-none">
+          <div className="pointer-events-auto">
+            <div className="glass px-6 py-3 rounded-2xl flex items-center gap-4 shadow-sm">
+               <span className="text-slate-400">⌘</span>
+               <input 
+                 type="text" 
+                 placeholder="Command palette..."
+                 className="bg-transparent border-0 outline-none text-sm font-bold w-48 focus:w-80 transition-all text-slate-800"
+                 value={searchQuery}
+                 onChange={(e) => setSearchQuery(e.target.value)}
+                 onKeyDown={(e) => e.key === 'Enter' && setView(View.Directory)}
+               />
             </div>
-            
-            <div className="flex items-center gap-4">
-              {/* Notification Center */}
-              <div className="relative">
+          </div>
+          
+          <div className="flex items-center gap-4 pointer-events-auto">
+             {/* Notification */}
+             <div className="relative">
                 <button 
                   onClick={() => setShowNotifications(!showNotifications)}
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all relative ${
-                    showNotifications ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-200'
-                  }`}
+                  className={`w-12 h-12 rounded-2xl glass flex items-center justify-center transition-all ${showNotifications ? 'bg-emerald-600 text-white border-emerald-600' : 'text-slate-500 hover:text-emerald-600'}`}
                 >
                   <span className="text-xl">🔔</span>
                   {unreadCount > 0 && (
@@ -116,69 +110,39 @@ const App: React.FC = () => {
                     </span>
                   )}
                 </button>
-
                 {showNotifications && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)}></div>
-                    <div className="absolute right-0 mt-3 w-80 bg-white border border-slate-200 rounded-[32px] shadow-2xl z-50 overflow-hidden animate-in zoom-in-95 slide-in-from-top-2 origin-top-right">
-                      <div className="p-5 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
-                        <p className="text-xs font-black text-slate-800 uppercase tracking-widest">Alerts Center</p>
-                        <button onClick={() => setNotifications([])} className="text-[10px] font-bold text-slate-400 hover:text-rose-500 transition-colors">Clear All</button>
+                   <div className="absolute right-0 mt-4 w-80 bento-card bg-white z-50 animate-in zoom-in-95 origin-top-right">
+                      <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-50">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Alerts</span>
+                        <span className="text-[10px] font-bold text-emerald-600">All Captured</span>
                       </div>
-                      <div className="max-h-96 overflow-y-auto divide-y divide-slate-50">
-                        {notifications.length > 0 ? (
-                          notifications.map((notif) => (
-                            <div key={notif.id} className="p-4 hover:bg-slate-50 transition-colors group">
-                               <div className="flex gap-3">
-                                 <span className="text-lg">
-                                   {notif.category === 'leave_start' ? '📅' : '🔙'}
-                                 </span>
-                                 <div>
-                                   <p className="text-xs font-bold text-slate-800">{notif.title}</p>
-                                   <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{notif.message}</p>
-                                 </div>
-                               </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="p-10 text-center">
-                             <p className="text-2xl mb-2 opacity-20">🎉</p>
-                             <p className="text-[10px] font-black text-slate-400 uppercase">All caught up!</p>
+                      <div className="space-y-4 max-h-60 overflow-y-auto">
+                        {notifications.length > 0 ? notifications.map(n => (
+                          <div key={n.id} className="text-xs">
+                            <p className="font-bold text-slate-800">{n.title}</p>
+                            <p className="text-slate-400 mt-1">{n.message}</p>
                           </div>
+                        )) : (
+                          <p className="text-xs text-slate-400 text-center py-4">System operating normally.</p>
                         )}
                       </div>
-                    </div>
-                  </>
+                   </div>
                 )}
-              </div>
-
-              <div className="bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 h-12">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                <span className="text-xs font-bold text-slate-600">
-                  {currentUser.role === 'Admin' ? 'Global Admin Mode' : `${currentUser.department} Scope`}
-                </span>
-              </div>
-            </div>
+             </div>
+             
+             <div className="glass px-6 py-3 rounded-2xl flex items-center gap-3">
+               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+               <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Live: {currentUser.role} Mode</span>
+             </div>
           </div>
+        </header>
 
-          <div className="pb-24">
+        <div className="px-8 pb-24">
+          <div className="max-w-[1200px] mx-auto pt-4">
             {renderView()}
           </div>
         </div>
       </main>
-
-      {/* Database Interaction Trigger - Only for Admin/Manager */}
-      {(currentUser.role === 'Admin' || currentUser.role === 'Manager') && (
-        <div className="fixed bottom-10 right-10 z-50">
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="bg-emerald-600 text-white w-14 h-14 md:w-auto md:px-6 md:py-4 rounded-[24px] shadow-2xl shadow-emerald-600/30 hover:bg-emerald-700 hover:scale-105 transition-all flex items-center justify-center gap-3 active:scale-95 group"
-          >
-            <span className="font-bold text-sm hidden md:inline">Hire National Talent</span>
-            <span className="text-2xl font-light">+</span>
-          </button>
-        </div>
-      )}
 
       <AddEmployeeModal 
         isOpen={isModalOpen} 
