@@ -1,9 +1,8 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Initialize the GoogleGenAI client using the API key directly from environment variables
-// Using a safety check for process.env
-const apiKey = typeof process !== 'undefined' && process.env ? process.env.API_KEY : '';
-const ai = new GoogleGenAI({ apiKey: apiKey || '' });
+// Initialize the Google GenAI SDK using direct access to process.env.API_KEY
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getKuwaitizationInsights = async (employeeData: string) => {
   const prompt = `
@@ -20,6 +19,7 @@ export const getKuwaitizationInsights = async (employeeData: string) => {
   `;
 
   try {
+    // Perform content generation using gemini-3-flash-preview for text tasks
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
@@ -35,12 +35,15 @@ export const getKuwaitizationInsights = async (employeeData: string) => {
             },
             complianceStatus: { type: Type.STRING, description: 'Must be Compliant, Warning, or Non-Compliant' }
           },
-          required: ["summary", "recommendations", "complianceStatus"]
+          required: ["summary", "recommendations", "complianceStatus"],
+          propertyOrdering: ["summary", "recommendations", "complianceStatus"]
         }
       }
     });
 
-    return JSON.parse(response.text || '{}');
+    // Access text property directly from GenerateContentResponse
+    const text = response.text || '{}';
+    return JSON.parse(text.trim());
   } catch (error) {
     console.error("Gemini Insight Error:", error);
     return {

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, User } from '../types';
+
+import React from 'react';
+import { View, User } from '../types.ts';
 
 interface SidebarProps {
   currentView: View;
@@ -9,77 +10,63 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, onLogout }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
   const allItems = [
-    { id: View.Dashboard, label: 'Dashboard', icon: '📊', roles: ['Admin', 'Manager'] },
-    { id: View.Profile, label: 'Workspace', icon: '👤', roles: ['Employee'] },
-    { id: View.Leaves, label: 'Leaves', icon: '📅', roles: ['Admin', 'Manager', 'Employee'] },
-    { id: View.Directory, label: 'Directory', icon: '👥', roles: ['Admin', 'Manager'] },
-    { id: View.Insights, label: 'AI Strategy', icon: '✨', roles: ['Admin', 'Manager'] },
-    { id: View.Compliance, label: 'Compliance', icon: '⚖️', roles: ['Admin'] },
+    { id: View.Dashboard, label: 'Dashboard', icon: '📊', roles: ['Admin', 'Manager', 'HR'] },
+    { id: View.Profile, label: 'My Workspace', icon: '👤', roles: ['Employee', 'Manager', 'Admin', 'HR'] },
+    { id: View.Attendance, label: 'Geo Attendance', icon: '📍', roles: ['Employee', 'Manager', 'Admin', 'HR'] },
+    { id: View.Leaves, label: 'Leave Hub', icon: '📅', roles: ['Admin', 'Manager', 'Employee', 'HR'] },
+    { id: View.Directory, label: 'Employee Directory', icon: '👥', roles: ['Admin', 'Manager', 'HR'] },
+    { id: View.Payroll, label: 'Payroll Processing', icon: '💰', roles: ['Admin', 'HR'] },
+    { id: View.Settlement, label: 'Final Settlement', icon: '📜', roles: ['Admin', 'HR'] },
+    { id: View.Insights, label: 'AI Insights', icon: '✨', roles: ['Admin', 'Manager', 'HR'] },
+    { id: View.Compliance, label: 'PAM Compliance', icon: '⚖️', roles: ['Admin', 'HR'] },
   ];
 
   const filteredItems = allItems.filter(item => item.roles.includes(user.role));
 
   return (
-    <div 
-      onMouseEnter={() => setIsExpanded(true)}
-      onMouseLeave={() => setIsExpanded(false)}
-      className={`h-screen sticky top-0 bg-white border-r border-slate-100 flex flex-col transition-all duration-300 z-50 ${isExpanded ? 'w-64 shadow-2xl' : 'w-20'}`}
-    >
-      <div className="p-5 h-20 flex items-center overflow-hidden">
-        <div className="min-w-[40px] h-10 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-600/20">
-          <span className="text-xl">🇰🇼</span>
-        </div>
-        <div className={`ml-4 whitespace-nowrap transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0'}`}>
-          <h1 className="text-lg font-black text-slate-900 tracking-tighter">HR PORTAL</h1>
-          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Kuwaitization MS</p>
-        </div>
+    <div className="w-72 bg-white border-r border-slate-200 h-screen sticky top-0 flex flex-col">
+      <div className="p-8 border-b border-slate-100">
+        <h1 className="text-2xl font-black text-emerald-800 flex items-center gap-2">
+          <span className="p-2 bg-emerald-50 rounded-xl">🇰🇼</span> HR Portal
+        </h1>
+        <p className="text-[10px] text-slate-400 font-black tracking-[0.2em] uppercase mt-2">National Talent Management</p>
       </div>
       
-      <nav className="flex-1 px-3 space-y-1 mt-6">
+      <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
         {filteredItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setView(item.id)}
-            className={`w-full flex items-center h-12 rounded-xl transition-all group relative ${
+            className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${
               currentView === item.id
-                ? 'bg-emerald-50 text-emerald-700'
-                : 'text-slate-400 hover:bg-slate-50 hover:text-slate-900'
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
+                : 'text-slate-500 hover:bg-slate-50'
             }`}
           >
-            <div className="min-w-[56px] flex items-center justify-center text-xl">
-              {item.icon}
-              {currentView === item.id && !isExpanded && (
-                <div className="absolute left-0 w-1 h-6 bg-emerald-600 rounded-r-full"></div>
-              )}
-            </div>
-            <span className={`whitespace-nowrap font-bold text-sm transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0'}`}>
-              {item.label}
-            </span>
+            <span className="text-xl">{item.icon}</span>
+            {item.label}
           </button>
         ))}
       </nav>
 
-      <div className="p-3 mt-auto">
-        <div className={`flex items-center rounded-2xl bg-slate-50 p-2 transition-all overflow-hidden ${isExpanded ? 'px-3' : 'px-1'}`}>
-          <div className="min-w-[40px] h-10 rounded-xl bg-white border border-slate-200 text-slate-600 flex items-center justify-center font-black text-xs shadow-sm">
-             {user.name[0]}
-          </div>
-          <div className={`ml-3 flex-1 min-w-0 transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0'}`}>
-            <p className="text-[10px] font-black text-slate-900 truncate uppercase">{user.name}</p>
-            <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{user.role}</p>
-          </div>
-          {isExpanded && (
-            <button 
-              onClick={onLogout}
-              className="ml-2 p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
-              title="Logout"
-            >
-              🚪
-            </button>
-          )}
+      <div className="p-6 space-y-4">
+        <div className="bg-slate-50 rounded-[24px] p-5">
+           <div className="flex items-center gap-3 mb-3">
+             <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs uppercase">
+                {user.name[0]}
+             </div>
+             <div className="min-w-0 flex-1">
+               <p className="text-xs font-bold text-slate-800 truncate">{user.name}</p>
+               <p className="text-[10px] text-slate-400 font-bold uppercase">{user.role}</p>
+             </div>
+           </div>
+           <button 
+             onClick={onLogout}
+             className="w-full py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold text-slate-500 hover:text-rose-600 hover:border-rose-100 transition-all uppercase tracking-widest"
+           >
+             Log Out
+           </button>
         </div>
       </div>
     </div>

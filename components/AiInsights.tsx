@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { getKuwaitizationInsights } from '../services/geminiService';
-import { dbService } from '../services/dbService';
-import { InsightReport } from '../types';
+import { getKuwaitizationInsights } from '../services/geminiService.ts';
+import { dbService } from '../services/dbService.ts';
+import { InsightReport } from '../types.ts';
 
 const AiInsights: React.FC = () => {
   const [loading, setLoading] = useState(false);

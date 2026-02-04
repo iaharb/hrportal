@@ -1,50 +1,82 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, LeaveRequest, LeaveType, Employee, LeaveBalances } from '../types';
-import { dbService } from '../services/dbService';
+import { User, LeaveRequest, LeaveType, Employee, PublicHoliday } from '../types.ts';
+import { dbService, calculateLeaveDays } from '../services/dbService.ts';
+import { useNotifications } from './NotificationSystem.tsx';
 
 interface LeaveManagementProps {
   user: User;
 }
 
 const LeaveManagement: React.FC<LeaveManagementProps> = ({ user }) => {
+  const { notify, confirm } = useNotifications();
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
+  const [personalRequests, setPersonalRequests] = useState<LeaveRequest[]>([]);
+  const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [employeeData, setEmployeeData] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [medicalCertificate, setMedicalCertificate] = useState<File | null>(null);
-  const [resumingRequestId, setResumingRequestId] = useState<string | null>(null);
-  const [resumptionDate, setResumptionDate] = useState<string>('');
+  const [processingId, setProcessingId] = useState<string | null>(null);
   
-  // Calendar state
-  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [hrEditDays, setHrEditDays] = useState<Record<string, number>>({});
+  const [hrIncludeSaturdays, setHrIncludeSaturdays] = useState<Record<string, boolean>>({});
+  const [employeeMap, setEmployeeMap] = useState<Record<string, Employee>>({});
 
   const [formData, setFormData] = useState({
     type: 'Annual' as LeaveType,
     startDate: '',
-    endDate: '',
+    endDate: '', 
     reason: ''
   });
+
+  const holidayDates = useMemo(() => publicHolidays.map(h => h.date), [publicHolidays]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const profile = await dbService.getEmployeeByName(user.name);
-      if (profile) setEmployeeData(profile);
-
-      let filter: { employeeId?: string, employeeName?: string, department?: string } = {};
+      const [profile, allEmployees, holidayData] = await Promise.all([
+        dbService.getEmployeeByName(user.name),
+        dbService.getEmployees(),
+        dbService.getPublicHolidays()
+      ]);
       
+      if (profile) setEmployeeData(profile);
+      setPublicHolidays(holidayData);
+      
+      const empMap: Record<string, Employee> = {};
+      allEmployees.forEach(e => empMap[e.id] = e);
+      setEmployeeMap(empMap);
+
+      let filter: any = {};
       if (user.role === 'Manager') {
-        filter = { department: user.department, employeeId: user.id, employeeName: user.name };
-      } else if (user.role === 'Admin') {
-        filter = {};
+        filter = { department: user.department };
+      } else if (user.role === 'Admin' || user.role === 'HR') {
+        filter = {}; 
       } else {
-        filter = { employeeId: user.id, employeeName: user.name };
+        filter = { employeeId: user.id };
       }
       
-      const data = await dbService.getLeaveRequests(filter);
-      setRequests(data);
+      const [teamData, personalData] = await Promise.all([
+        dbService.getLeaveRequests(filter),
+        dbService.getLeaveRequests({ employeeId: user.id })
+      ]);
+      
+      setRequests(teamData);
+      setPersonalRequests(personalData);
+
+      const dayMap: Record<string, number> = {};
+      const satMap: Record<string, boolean> = {};
+      
+      teamData.forEach(r => {
+        const emp = empMap[r.employeeId];
+        const defaultIncludeSat = emp ? emp.workDaysPerWeek === 6 : false;
+        dayMap[r.id] = r.days;
+        satMap[r.id] = defaultIncludeSat;
+      });
+      
+      setHrEditDays(dayMap);
+      setHrIncludeSaturdays(satMap);
     } catch (err) {
       console.error("Fetch leave error:", err);
     } finally {
@@ -56,504 +88,492 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({ user }) => {
     fetchData();
   }, [user]);
 
-  const calculateWorkingDays = (start: string, end: string) => {
-    if (!start || !end) return 0;
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return 0;
+  // Derived available balances accounting for pending requests
+  const availableBalances = useMemo(() => {
+    if (!employeeData) return { annual: 0, sick: 0, emergency: 0, pending: { annual: 0, sick: 0, emergency: 0 } };
     
-    let count = 0;
-    const curDate = new Date(startDate.getTime());
-    while (curDate <= endDate) {
-      const dayOfWeek = curDate.getDay();
-      if (dayOfWeek !== 5 && dayOfWeek !== 6) count++;
-      curDate.setDate(curDate.getDate() + 1);
-    }
-    return count;
-  };
+    const pendingRequests = personalRequests.filter(r => 
+      ['Pending', 'Manager_Approved', 'HR_Approved', 'Resumed'].includes(r.status)
+    );
 
-  const workingDaysRequested = calculateWorkingDays(formData.startDate, formData.endDate);
-  const isExtendedSickLeave = formData.type === 'Sick' && workingDaysRequested > 3;
+    const pending = {
+      annual: pendingRequests.filter(r => r.type === 'Annual').reduce((acc, curr) => acc + curr.days, 0),
+      sick: pendingRequests.filter(r => r.type === 'Sick').reduce((acc, curr) => acc + curr.days, 0),
+      emergency: pendingRequests.filter(r => r.type === 'Emergency').reduce((acc, curr) => acc + curr.days, 0),
+    };
+
+    return {
+      annual: Math.max(0, employeeData.leaveBalances.annual - pending.annual),
+      sick: Math.max(0, employeeData.leaveBalances.sick - pending.sick),
+      emergency: Math.max(0, employeeData.leaveBalances.emergency - pending.emergency),
+      pending
+    };
+  }, [employeeData, personalRequests]);
+
+  const calculationBreakdown = useMemo(() => {
+    if (!formData.startDate || !formData.endDate) return { total: 0, holidays: [], weekends: [] };
+    
+    const start = new Date(formData.startDate);
+    const end = new Date(formData.endDate);
+    const isFiveDayWorker = employeeData?.workDaysPerWeek === 5;
+    
+    let total = 0;
+    const holidaysFound: string[] = [];
+    const weekendsFound: string[] = [];
+    
+    let current = new Date(start.getTime());
+    while (current <= end) {
+      const dayOfWeek = current.getDay();
+      const dateStr = current.toISOString().split('T')[0];
+      const holiday = publicHolidays.find(h => h.date === dateStr);
+
+      if (dayOfWeek === 5) {
+        weekendsFound.push(`${dateStr} (Friday - Always Skipped)`);
+      } else if (holiday) {
+        holidaysFound.push(`${dateStr} (${holiday.name})`);
+      } else if (dayOfWeek === 6 && isFiveDayWorker) {
+        total++;
+      } else {
+        total++;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+    
+    return { total, holidays: holidaysFound, weekends: weekendsFound };
+  }, [formData.startDate, formData.endDate, employeeData, publicHolidays]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!employeeData) return;
+    if (calculationBreakdown.total <= 0) {
+      notify("Invalid Selection", "No billable working days found in this range.", "warning");
+      return;
+    }
     
-    if (workingDaysRequested <= 0) {
-      alert("Invalid date range selected.");
-      return;
-    }
-
-    if (isExtendedSickLeave && !medicalCertificate) {
-      alert("A medical certificate is mandatory for sick leaves exceeding 3 days per Kuwait Labor Law.");
-      return;
-    }
-
     setSubmitting(true);
     try {
       await dbService.createLeaveRequest({
         employeeId: user.id,
         employeeName: user.name,
-        department: user.department || employeeData.department || 'General',
+        department: user.department || employeeData?.department || 'General',
         type: formData.type,
         startDate: formData.startDate,
         endDate: formData.endDate,
-        days: workingDaysRequested,
+        days: calculationBreakdown.total,
         reason: formData.reason,
         status: 'Pending',
-        managerId: employeeData.managerId || 'admin-1',
+        managerId: employeeData?.managerId || '00000000-0000-0000-0000-000000000000',
         createdAt: new Date().toISOString()
-      });
+      }, user);
       setShowForm(false);
       setFormData({ type: 'Annual', startDate: '', endDate: '', reason: '' });
-      setMedicalCertificate(null);
       await fetchData();
+      notify("Request Logged", "Awaiting director/manager authorization. Balances updated.", "success");
     } catch (err: any) {
-      alert("Submission Error: " + err.message);
+      notify("Error", err.message, "error");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleStatusUpdate = async (requestId: string, newStatus: LeaveRequest['status']) => {
+  const handleManagerApprove = async (id: string) => {
+    setProcessingId(id);
     try {
-      await dbService.updateLeaveRequestStatus(requestId, newStatus);
+      await dbService.updateLeaveRequestStatus(id, 'Manager_Approved', user);
       await fetchData();
+      notify("Authorized", "Manager approval complete. Forwarded to HR.", "success");
     } catch (err: any) {
-      alert("Workflow error: " + err.message);
-    }
-  };
-
-  const initiateResumption = (request: LeaveRequest) => {
-    setResumingRequestId(request.id);
-    setResumptionDate(new Date().toISOString().split('T')[0]);
-  };
-
-  const submitResumption = async (request: LeaveRequest) => {
-    if (!resumptionDate) return;
-
-    if (resumptionDate < request.startDate) {
-      alert(`Invalid Return Date: You cannot resume duty before your leave start date (${request.startDate}).`);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      await dbService.updateLeaveRequestStatus(request.id, 'Resumed - Awaiting Approval', { actualReturnDate: resumptionDate });
-      await fetchData();
-      setResumingRequestId(null);
-      alert(`Duty resumed on ${resumptionDate}. Please wait for your manager to approve the return to finalize balance deduction.`);
-    } catch (err: any) {
-      console.error("Resumption error:", err);
-      alert("Failed to resume duty: " + err.message);
+      notify("Error", err.message, "error");
     } finally {
-      setLoading(false);
+      setProcessingId(null);
     }
   };
 
-  const handleApproveResumption = async (request: LeaveRequest) => {
-    if (!window.confirm(`Approve Return for ${request.employeeName}? This will calculate final days from ${request.startDate} to ${request.actualReturnDate} and deduct them from their balance.`)) return;
-
+  const handleHRApprove = async (id: string) => {
+    setProcessingId(id);
     try {
-      setLoading(true);
-      const result = await dbService.approveResumption(request.id);
+      await dbService.updateLeaveRequestStatus(id, 'HR_Approved', user, "HR pre-approval complete. Awaiting resumption.");
       await fetchData();
-      alert(`Return Approved! Total days deducted: ${result.actualDaysUsed}`);
+      notify("HR Verified", "Leave quota confirmed and registered.", "success");
     } catch (err: any) {
-      console.error("Approval error:", err);
-      alert("Failed to approve resumption: " + err.message);
+      notify("Error", err.message, "error");
     } finally {
-      setLoading(false);
+      setProcessingId(null);
     }
   };
 
-  // Calendar logic
-  const calendarDays = useMemo(() => {
-    const year = calendarDate.getFullYear();
-    const month = calendarDate.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    
-    const days = [];
-    // Padding for start of month
-    for (let i = 0; i < firstDay; i++) {
-      days.push(null);
+  const handleResumption = async (id: string) => {
+    setProcessingId(id);
+    try {
+      await dbService.updateLeaveRequestStatus(id, 'Resumed', user, "Employee confirmed resumption to work.");
+      await fetchData();
+      notify("Resumed", "Status updated to Active. HR notified for payroll sync.", "success");
+    } catch (err: any) {
+      notify("Error", err.message, "error");
+    } finally {
+      setProcessingId(null);
     }
-    // Days of the month
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(new Date(year, month, i));
-    }
-    return days;
-  }, [calendarDate]);
+  };
 
-  const getLeavesForDay = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    return requests.filter(req => {
-      return (req.status === 'Approved' || req.status === 'Pending') &&
-             dateStr >= req.startDate && 
-             dateStr <= req.endDate;
+  const handleHRFinalize = async (req: LeaveRequest) => {
+    const finalizedDays = hrEditDays[req.id] || req.days;
+    confirm({
+      title: "Sync to Payroll",
+      message: `Finalizing ${finalizedDays} days for ${req.employeeName}. This will update payroll logs and balances permanently. Proceed?`,
+      confirmText: "Sync & Close",
+      onConfirm: async () => {
+        setProcessingId(req.id);
+        try {
+          await dbService.finalizeHRApproval(req.id, user, finalizedDays);
+          await fetchData();
+          notify("Finalized", "Payroll reconciliation complete and balances updated.", "success");
+        } catch (err: any) {
+          notify("Error", err.message, "error");
+        } finally {
+          setProcessingId(null);
+        }
+      }
     });
   };
 
-  const changeMonth = (offset: number) => {
-    setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + offset, 1));
+  const toggleSaturdayInclusion = (req: LeaveRequest) => {
+    const emp = employeeMap[req.employeeId];
+    if (emp && emp.workDaysPerWeek === 5) return;
+    
+    const newValue = !hrIncludeSaturdays[req.id];
+    setHrIncludeSaturdays(prev => ({ ...prev, [req.id]: newValue }));
+    
+    const recalculated = calculateLeaveDays(req.startDate, req.endDate, req.type, newValue, holidayDates);
+    setHrEditDays(prev => ({ ...prev, [req.id]: recalculated }));
   };
 
-  const today = new Date().toISOString().split('T')[0];
+  const getLeaveIcon = (type: string) => {
+    switch (type) {
+      case 'Annual': return '🌴';
+      case 'Sick': return '🤒';
+      case 'Emergency': return '🚨';
+      case 'Maternity': return '👶';
+      case 'Hajj': return '🕌';
+      default: return '📅';
+    }
+  };
+
+  const isHrAdmin = user.role === 'Admin' || user.role === 'HR';
+  const isManagerAdmin = user.role === 'Manager' || user.role === 'Admin';
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Leave Management Hub</h2>
-          <p className="text-slate-500 text-sm">Track team availability and national workforce leaves.</p>
+          <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Kuwait Labor Law Workflow</h2>
+          <p className="text-slate-500 text-sm">Automated compliance for National Holidays & Article 69/70 Leave logic.</p>
         </div>
         <button 
           onClick={() => setShowForm(!showForm)}
-          className={`px-6 py-3 rounded-xl font-bold transition-all shadow-lg active:scale-95 ${
-            showForm ? 'bg-slate-200 text-slate-600' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-600/20'
+          className={`px-6 py-3 rounded-2xl font-bold transition-all shadow-lg active:scale-95 ${
+            showForm ? 'bg-slate-200 text-slate-600 shadow-none' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-600/20'
           }`}
         >
-          {showForm ? 'Cancel' : 'Request New Leave'}
+          {showForm ? 'Cancel' : 'New Leave Application'}
         </button>
       </div>
 
       {showForm && (
-        <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm animate-in zoom-in-95">
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="md:col-span-1">
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Leave Category</label>
-              <select 
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-emerald-500 outline-none"
-                value={formData.type}
-                onChange={e => setFormData({...formData, type: e.target.value as LeaveType})}
-              >
-                <option value="Annual">Annual Leave</option>
-                <option value="Sick">Sick Leave</option>
-                <option value="Emergency">Emergency Leave</option>
-                <option value="Maternity">Maternity Leave</option>
-                <option value="Hajj">Hajj Leave</option>
-              </select>
-
-              {formData.type === 'Sick' && (
-                <div className="mt-4 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl animate-in slide-in-from-top-2">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-indigo-600">ℹ️</span>
-                    <p className="text-[10px] font-black text-indigo-800 uppercase tracking-widest">Kuwait Labor Law Info (Art. 69)</p>
-                  </div>
-                  <p className="text-[11px] text-indigo-700 leading-relaxed">
-                    Employees are entitled to up to <strong>85 days</strong> of sick leave per year:
-                  </p>
-                  <ul className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1">
-                    <li className="text-[10px] text-indigo-600 flex items-center gap-1">• 15 Days: <span className="font-bold">Full Pay</span></li>
-                    <li className="text-[10px] text-indigo-600 flex items-center gap-1">• 10 Days: <span className="font-bold">75% Pay</span></li>
-                    <li className="text-[10px] text-indigo-600 flex items-center gap-1">• 10 Days: <span className="font-bold">50% Pay</span></li>
-                    <li className="text-[10px] text-indigo-600 flex items-center gap-1">• 10 Days: <span className="font-bold">25% Pay</span></li>
-                    <li className="text-[10px] text-indigo-600 flex items-center gap-1">• 30 Days: <span className="font-bold">No Pay</span></li>
-                  </ul>
-                </div>
-              )}
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Duration Period</label>
-              <div className="flex items-center gap-2">
-                <input 
-                  required type="date" 
-                  className="flex-1 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-sm"
-                  value={formData.startDate}
-                  onChange={e => setFormData({...formData, startDate: e.target.value})}
-                />
-                <span className="text-slate-400">to</span>
-                <input 
-                  required type="date" 
-                  className="flex-1 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-sm"
-                  value={formData.endDate}
-                  onChange={e => setFormData({...formData, endDate: e.target.value})}
-                />
+        <div className="bg-white p-10 rounded-[40px] border border-slate-200 shadow-sm animate-in zoom-in-95 duration-200">
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            <div className="lg:col-span-4 space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Leave Type</label>
+                <select 
+                  className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-emerald-500 outline-none font-bold text-slate-700"
+                  value={formData.type}
+                  onChange={e => setFormData({...formData, type: e.target.value as LeaveType})}
+                >
+                  <option value="Annual">🌴 Annual (Article 70)</option>
+                  <option value="Sick">🤒 Sick (Article 69)</option>
+                  <option value="Emergency">🚨 Emergency Leave</option>
+                  <option value="Maternity">👶 Maternity Leave</option>
+                </select>
               </div>
-              
-              {isExtendedSickLeave && (
-                <div className="mt-4 animate-in slide-in-from-right-4">
-                  <label className="block text-xs font-bold text-rose-600 uppercase mb-2">{"Medical Report Required (>3 Days)"}</label>
-                  <div className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all ${medicalCertificate ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200 hover:border-rose-300'}`}>
-                    <input 
-                      type="file" 
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      onChange={(e) => setMedicalCertificate(e.target.files?.[0] || null)}
-                    />
-                    {medicalCertificate ? (
-                      <div className="flex flex-col items-center">
-                        <span className="text-2xl mb-1">📄</span>
-                        <p className="text-xs font-bold text-emerald-700">{medicalCertificate.name}</p>
-                        <p className="text-[10px] text-emerald-500">Document ready for verification</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center">
-                        <span className="text-2xl mb-1 opacity-50">📤</span>
-                        <p className="text-[11px] font-bold text-rose-700">Attach Medical Certificate</p>
-                        <p className="text-[9px] text-rose-500 uppercase font-black mt-1">PDF, JPG or PNG</p>
-                      </div>
-                    )}
-                  </div>
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Leave Period</label>
+                <div className="space-y-3">
+                  <input required type="date" className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-bold" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} />
+                  <p className="text-center text-[10px] text-slate-400 font-black uppercase">To</p>
+                  <input required type="date" className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-bold" value={formData.endDate} onChange={e => setFormData({...formData, endDate: e.target.value})} />
                 </div>
-              )}
+              </div>
             </div>
 
-            <div className="md:col-span-2 flex justify-between items-center bg-emerald-50 p-6 rounded-2xl border border-emerald-100">
-               <div>
-                 <p className="text-xs font-bold text-emerald-800">Working Days (Planned)</p>
-                 <p className="text-3xl font-black text-emerald-600">
-                   {workingDaysRequested} Days
-                 </p>
-               </div>
-               <div className="flex flex-col items-end">
-                 <button 
-                   type="submit"
-                   disabled={submitting || (isExtendedSickLeave && !medicalCertificate)}
-                   className={`px-10 py-4 rounded-xl font-bold shadow-xl transition-all active:scale-95 ${
-                    isExtendedSickLeave && !medicalCertificate 
-                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
-                      : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-600/20'
-                   }`}
-                 >
-                   {submitting ? 'Processing...' : 'Confirm Request'}
-                 </button>
-                 {isExtendedSickLeave && !medicalCertificate && (
-                   <p className="text-[10px] text-rose-600 font-bold mt-2 animate-pulse">Missing Medical Certificate</p>
-                 )}
-               </div>
+            <div className="lg:col-span-8 space-y-8">
+              <div className="bg-slate-50 p-8 rounded-[32px] border border-slate-100 min-h-[200px]">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Calculation Audit Breakdown</h4>
+                {formData.startDate && formData.endDate ? (
+                  <div className="space-y-4">
+                    <div className="flex items-end justify-between border-b border-slate-200 pb-4">
+                      <div>
+                        <p className="text-4xl font-black text-slate-900">{calculationBreakdown.total} <span className="text-sm text-slate-400">Billable Days</span></p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] px-3 py-1 bg-white border border-slate-200 rounded-lg font-black text-slate-500 uppercase">
+                          {employeeData?.workDaysPerWeek}-Day Week
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest">Holidays Deducted ({calculationBreakdown.holidays.length})</p>
+                        {calculationBreakdown.holidays.length > 0 ? (
+                          calculationBreakdown.holidays.map((h, i) => <p key={i} className="text-[11px] font-bold text-slate-600">🏛️ {h}</p>)
+                        ) : <p className="text-[11px] text-slate-400 italic">None detected in range.</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">Weekends Deducted ({calculationBreakdown.weekends.length})</p>
+                        {calculationBreakdown.weekends.length > 0 ? (
+                          calculationBreakdown.weekends.map((w, i) => <p key={i} className="text-[11px] font-bold text-slate-600">🗓️ {w}</p>)
+                        ) : <p className="text-[11px] text-slate-400 italic">None detected in range.</p>}
+                      </div>
+                    </div>
+                    
+                    <div className="mt-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                       <p className="text-[10px] text-indigo-700 font-bold">
+                         ℹ️ Note: Saturdays are counted as leave days for 5-day week workers if they fall within the leave range, per company policy.
+                       </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-slate-300 italic text-sm">
+                    Enter dates to view automatic holiday & weekend analysis.
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-6">
+                <textarea 
+                  placeholder="Reason for request..."
+                  className="flex-1 px-5 py-4 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm min-h-[80px]"
+                  value={formData.reason}
+                  onChange={e => setFormData({...formData, reason: e.target.value})}
+                />
+                <button type="submit" disabled={submitting || calculationBreakdown.total <= 0} className="px-12 py-6 bg-emerald-600 text-white rounded-3xl font-black text-sm shadow-xl shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-30 active:scale-95 transition-all">
+                  {submitting ? '...' : 'Submit Application'}
+                </button>
+              </div>
             </div>
           </form>
         </div>
       )}
 
-      {/* Calendar Section */}
-      <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h3 className="text-lg font-bold text-slate-800">Workforce Availability</h3>
-            <p className="text-xs text-slate-500 uppercase font-black tracking-widest mt-1">
-              {calendarDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
-            <button 
-              onClick={() => changeMonth(-1)}
-              className="w-8 h-8 rounded-lg hover:bg-white hover:shadow-sm flex items-center justify-center text-slate-400 transition-all"
-            >
-              ←
-            </button>
-            <button 
-              onClick={() => setCalendarDate(new Date())}
-              className="px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-emerald-600"
-            >
-              Today
-            </button>
-            <button 
-              onClick={() => changeMonth(1)}
-              className="w-8 h-8 rounded-lg hover:bg-white hover:shadow-sm flex items-center justify-center text-slate-400 transition-all"
-            >
-              →
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-7 border-b border-slate-50 mb-2">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-            <div key={day} className="py-2 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              {day}
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-7 gap-px bg-slate-100 rounded-2xl overflow-hidden border border-slate-100">
-          {calendarDays.map((date, idx) => {
-            if (!date) return <div key={`empty-${idx}`} className="bg-slate-50 h-32 opacity-50"></div>;
-            
-            const dayLeaves = getLeavesForDay(date);
-            const isToday = date.toISOString().split('T')[0] === today;
-
-            return (
-              <div key={date.toISOString()} className={`bg-white h-32 p-2 flex flex-col gap-1 overflow-y-auto group hover:bg-slate-50/80 transition-colors ${isToday ? 'bg-emerald-50/30' : ''}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-[11px] font-bold ${isToday ? 'bg-emerald-600 text-white w-5 h-5 rounded-full flex items-center justify-center' : 'text-slate-400'}`}>
-                    {date.getDate()}
-                  </span>
-                  {dayLeaves.length > 0 && (
-                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-tighter">{dayLeaves.length} {dayLeaves.length === 1 ? 'Leave' : 'Leaves'}</span>
-                  )}
-                </div>
-                {dayLeaves.map(req => (
-                  <div 
-                    key={req.id} 
-                    className={`px-2 py-1 rounded-md text-[9px] font-bold truncate transition-all ${
-                      req.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
-                    }`}
-                    title={`${req.employeeName}: ${req.type}`}
-                  >
-                    {req.employeeName.split(' ')[0]} • {req.type.slice(0, 1)}
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
-               <h3 className="font-bold text-slate-800">Leave Activity Feed</h3>
-               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{requests.length} Records Found</span>
-            </div>
-            <div className="divide-y divide-slate-50">
-              {loading ? (
-                <div className="p-20 text-center animate-pulse text-slate-400">Updating records...</div>
-              ) : requests.length > 0 ? (
-                requests.map((req) => (
-                  <div key={req.id} className="p-6 flex flex-col hover:bg-slate-50/50 transition-colors">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-slate-100 flex flex-col items-center justify-center border border-slate-200">
-                          <span className="text-[10px] font-black text-slate-400 uppercase leading-none">{req.type.slice(0, 3)}</span>
-                          <span className="text-lg font-bold text-slate-700">{req.days}</span>
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-slate-800 text-sm">
-                            {req.employeeName} 
-                            <span className="ml-2 font-normal text-slate-400">• {req.type}</span>
-                          </h4>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            {new Date(req.startDate).toLocaleDateString()} — {new Date(req.endDate).toLocaleDateString()}
-                            {req.actualReturnDate && (
-                              <span className="ml-2 text-indigo-600 font-bold">• Resumed {new Date(req.actualReturnDate).toLocaleDateString()}</span>
-                            )}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4">
-                        <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                          req.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
-                          req.status === 'Pending' ? 'bg-amber-100 text-amber-700' :
-                          req.status === 'Resumed - Awaiting Approval' ? 'bg-indigo-100 text-indigo-700 animate-pulse' :
-                          req.status === 'Completed' ? 'bg-slate-100 text-slate-500' : 'bg-rose-100 text-rose-700'
-                        }`}>
-                          {req.status}
-                        </div>
-
-                        {user.name === req.employeeName && req.status === 'Approved' && today >= req.startDate && !resumingRequestId && (
-                          <button 
-                            type="button"
-                            onClick={() => initiateResumption(req)}
-                            className="px-5 py-2.5 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 flex items-center gap-2 active:scale-95"
-                          >
-                            <span>🔙</span> Resume Duty
-                          </button>
-                        )}
-
-                        {(user.role === 'Manager' || user.role === 'Admin') && (
-                          <div className="flex gap-2">
-                            {user.name !== req.employeeName && req.status === 'Pending' && (
-                              <>
-                                <button onClick={() => handleStatusUpdate(req.id, 'Approved')} className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 font-bold text-xs">Approve</button>
-                                <button onClick={() => handleStatusUpdate(req.id, 'Rejected')} className="px-4 py-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 font-bold text-xs">Reject</button>
-                              </>
-                            )}
-                            {req.status === 'Resumed - Awaiting Approval' && (
-                              <button 
-                                onClick={() => handleApproveResumption(req)}
-                                className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold text-xs shadow-md shadow-indigo-600/20"
-                              >
-                                Approve Return
-                              </button>
-                            )}
+        <div className="lg:col-span-2 space-y-8">
+          {(user.role !== 'Employee' || isHrAdmin) && (
+            <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
+                <h3 className="font-bold text-slate-800 tracking-tight">Executive Approval Feed</h3>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pending Decisions</span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {requests.filter(r => r.status !== 'HR_Finalized' && r.status !== 'Rejected' && r.status !== 'Paid').map((req) => {
+                  const emp = employeeMap[req.employeeId];
+                  const includeSat = hrIncludeSaturdays[req.id] ?? (emp?.workDaysPerWeek === 6);
+                  
+                  return (
+                    <div key={req.id} className="p-8 hover:bg-slate-50/30 transition-all">
+                      <div className="flex flex-col gap-6">
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center text-2xl border border-slate-200">
+                              {getLeaveIcon(req.type)}
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-900 text-lg flex items-center gap-2">
+                                {req.employeeName}
+                                <span className="text-[9px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded uppercase font-black">{req.department}</span>
+                              </p>
+                              <p className="text-xs text-slate-500 font-medium tracking-tight">
+                                {req.startDate} → {req.endDate} ({req.days} working days)
+                              </p>
+                            </div>
                           </div>
-                        )}
+                          <div className="text-right">
+                            <span className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm ${
+                              req.status === 'Pending' ? 'bg-amber-100 text-amber-700' : 
+                              req.status === 'Manager_Approved' ? 'bg-indigo-100 text-indigo-700' :
+                              req.status === 'HR_Approved' ? 'bg-emerald-100 text-emerald-700' :
+                              'bg-rose-100 text-rose-700'
+                            }`}>
+                              {req.status.replace('_', ' ')}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-4">
+                          {isManagerAdmin && req.status === 'Pending' && (
+                            <button 
+                              disabled={processingId === req.id}
+                              onClick={() => handleManagerApprove(req.id)}
+                              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs shadow-lg hover:bg-black transition-all active:scale-95"
+                            >
+                              Director / Manager: Approve & Forward
+                            </button>
+                          )}
+
+                          {isHrAdmin && req.status === 'Manager_Approved' && (
+                            <button 
+                              disabled={processingId === req.id}
+                              onClick={() => handleHRApprove(req.id)}
+                              className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs shadow-lg hover:bg-emerald-700 transition-all active:scale-95"
+                            >
+                              HR Lead: Verify Quota & Authorize
+                            </button>
+                          )}
+
+                          {isHrAdmin && req.status === 'Resumed' && (
+                            <div className="w-full bg-slate-50 p-8 rounded-[32px] border border-slate-200 space-y-6">
+                              <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+                                <h4 className="text-xs font-black text-slate-900 uppercase">Payroll Reconciliation Hub</h4>
+                                <div className="flex items-center gap-4">
+                                  <span className="text-[10px] font-bold text-slate-500">Include Sat:</span>
+                                  <button onClick={() => toggleSaturdayInclusion(req)} className={`w-10 h-5 rounded-full relative transition-colors ${includeSat ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${includeSat ? 'left-[22px]' : 'left-0.5'}`}></div>
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center justify-between">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase">Confirmed Deductible Days:</p>
+                                <input type="number" className="w-20 px-3 py-2 border border-slate-300 rounded-xl font-black text-sm bg-white" value={hrEditDays[req.id] || req.days} onChange={e => setHrEditDays({...hrEditDays, [req.id]: parseInt(e.target.value) || 0})} />
+                              </div>
+
+                              <button onClick={() => handleHRFinalize(req)} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs shadow-lg hover:bg-indigo-700 transition-all">
+                                Finalize & Sync to Payroll
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
+                  );
+                })}
+                {requests.filter(r => r.status !== 'HR_Finalized' && r.status !== 'Rejected' && r.status !== 'Paid').length === 0 && (
+                  <div className="p-16 text-center text-slate-400 font-medium italic">All departmental leave tasks are up to date.</div>
+                )}
+              </div>
+            </div>
+          )}
 
-                    {/* Inline Resumption Form */}
-                    {resumingRequestId === req.id && (
-                      <div className="mt-4 p-5 bg-blue-50 border border-blue-100 rounded-2xl animate-in slide-in-from-top-2">
-                        <div className="flex flex-col sm:flex-row items-end gap-4">
-                          <div className="flex-1 w-full">
-                            <label className="block text-[10px] font-black text-blue-700 uppercase tracking-widest mb-2">Confirm Actual Return Date</label>
-                            <input 
-                              type="date" 
-                              className="w-full px-4 py-2.5 rounded-xl border border-blue-200 bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                              value={resumptionDate}
-                              onChange={(e) => setResumptionDate(e.target.value)}
-                            />
-                          </div>
-                          <div className="flex gap-2">
-                            <button 
-                              onClick={() => setResumingRequestId(null)}
-                              className="px-4 py-2.5 bg-white text-slate-500 border border-slate-200 rounded-xl font-bold text-xs hover:bg-slate-50"
-                            >
-                              Cancel
-                            </button>
-                            <button 
-                              onClick={() => submitResumption(req)}
-                              className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-blue-600/10 hover:bg-blue-700"
-                            >
-                              Submit Resumption
-                            </button>
-                          </div>
-                        </div>
-                        {resumptionDate && resumptionDate < req.startDate && (
-                          <p className="text-[10px] text-rose-600 font-bold mt-2">Invalid: Date cannot be before leave start date.</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <div className="p-20 text-center text-slate-400">
-                  <p className="text-3xl mb-3 opacity-20">📂</p>
-                  <p className="text-sm">No leave records to display.</p>
-                </div>
-              )}
+          <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800 tracking-tight">My Historical Activity</h3>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{personalRequests.length} Requests Found</span>
+            </div>
+            <div className="divide-y divide-slate-100">
+               {personalRequests.map(req => (
+                 <div key={req.id} className="p-8 hover:bg-slate-50/30 transition-all">
+                   <div className="flex justify-between items-center">
+                     <div className="flex items-center gap-4">
+                       <span className="text-2xl">{getLeaveIcon(req.type)}</span>
+                       <div>
+                         <p className="font-bold text-slate-900 text-sm">{req.type} Leave Period</p>
+                         <p className="text-[10px] text-slate-500 font-medium uppercase">{req.startDate} to {req.endDate} ({req.days}d)</p>
+                       </div>
+                     </div>
+                     <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                       req.status === 'Paid' || req.status === 'HR_Finalized' ? 'bg-slate-100 text-slate-400' : 'bg-emerald-100 text-emerald-700'
+                     }`}>
+                       {req.status.replace('_', ' ')}
+                     </span>
+                   </div>
+
+                   {req.status === 'HR_Approved' && (
+                     <div className="mt-6 bg-indigo-50 p-6 rounded-[24px] border border-indigo-100 flex items-center justify-between gap-4">
+                        <p className="text-[11px] text-indigo-800 font-bold italic leading-relaxed">System has authorized your leave. Please confirm your physical return to finalize records.</p>
+                        <button 
+                          disabled={processingId === req.id}
+                          onClick={() => handleResumption(req.id)}
+                          className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-[9px] uppercase tracking-[0.15em] hover:bg-indigo-700 shadow-lg active:scale-95 transition-all"
+                        >
+                          Confirm Resumption
+                        </button>
+                     </div>
+                   )}
+                 </div>
+               ))}
+               {personalRequests.length === 0 && (
+                 <div className="p-16 text-center text-slate-400 font-medium italic">You have no recorded leave history.</div>
+               )}
             </div>
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
-             <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">Available Balances</h3>
-             <div className="space-y-4">
+        <div className="space-y-8">
+          <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm">
+             <div className="flex items-center justify-between mb-8">
+               <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                 Available Balances
+               </h3>
+               <span className="text-[8px] font-black text-slate-400 border border-slate-200 px-2 py-0.5 rounded">Net Total</span>
+             </div>
+             <div className="space-y-8">
                 {[
-                  { label: 'Annual', val: employeeData?.leaveBalances.annual || 0, max: 30, color: 'emerald' },
-                  { label: 'Sick', val: employeeData?.leaveBalances.sick || 0, max: 15, color: 'rose' },
-                  { label: 'Emergency', val: employeeData?.leaveBalances.emergency || 0, max: 6, color: 'amber' }
+                  { label: 'Annual (Article 70)', val: availableBalances.annual, pending: availableBalances.pending.annual, max: 30, color: 'emerald' },
+                  { label: 'Sick Threshold', val: availableBalances.sick, pending: availableBalances.pending.sick, max: 45, color: 'rose' },
+                  { label: 'Emergency Allocation', val: availableBalances.emergency, pending: availableBalances.pending.emergency, max: 6, color: 'amber' }
                 ].map((b, i) => (
-                  <div key={i} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                     <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-bold text-slate-600">{b.label} Leave</span>
-                        <span className={`text-xs font-black text-${b.color === 'emerald' ? 'emerald' : b.color === 'rose' ? 'rose' : 'amber'}-600`}>{b.val}d left</span>
+                  <div key={i}>
+                     <div className="flex justify-between items-center mb-2 px-1">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{b.label}</span>
+                        <div className="text-right">
+                          <span className="text-xs font-black text-slate-900">{b.val} / {b.max}d</span>
+                          {b.pending > 0 && (
+                            <p className="text-[8px] font-bold text-amber-600 uppercase tracking-tight mt-0.5 animate-pulse">
+                              - {b.pending}d pending
+                            </p>
+                          )}
+                        </div>
                      </div>
-                     <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                        <div className={`bg-${b.color === 'emerald' ? 'emerald' : b.color === 'rose' ? 'rose' : 'amber'}-500 h-full transition-all duration-500`} style={{ width: `${Math.min(100, (b.val / b.max) * 100)}%` }}></div>
+                     <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden relative">
+                        {/* The Actual Allocation */}
+                        <div 
+                          className={`absolute top-0 left-0 h-full transition-all duration-1000 ${b.color === 'rose' ? 'bg-rose-500/30' : (b.color === 'emerald' ? 'bg-emerald-500/30' : 'bg-amber-500/30')}`} 
+                          style={{ width: `${Math.min(100, (((b.val + b.pending)) / b.max) * 100)}%` }}
+                        ></div>
+                        {/* The Net Available */}
+                        <div 
+                          className={`absolute top-0 left-0 h-full transition-all duration-1000 ${b.color === 'rose' ? 'bg-rose-500' : (b.color === 'emerald' ? 'bg-emerald-500' : 'bg-amber-500')}`} 
+                          style={{ width: `${Math.min(100, (b.val / b.max) * 100)}%` }}
+                        ></div>
                      </div>
                   </div>
                 ))}
-             </div>
-             <div className="mt-8 p-5 bg-blue-50 border border-blue-100 rounded-2xl">
-                <p className="text-[10px] font-black text-blue-800 uppercase mb-2">Resumption Process</p>
-                <div className="space-y-2">
-                  <p className="text-[11px] text-blue-700 leading-snug">
-                    1. <strong>Employee:</strong> Submits return date via Resume Duty.
-                  </p>
-                  <p className="text-[11px] text-blue-700 leading-snug">
-                    2. <strong>Manager:</strong> Reviews and approves return.
-                  </p>
-                  <p className="text-[11px] text-blue-700 leading-snug">
-                    3. <strong>System:</strong> Final balance deduction occurs.
+                <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <p className="text-[9px] text-slate-500 leading-relaxed italic">
+                    Available balance = (Allocated Total - Days finalized by HR - Days in pending requests).
                   </p>
                 </div>
              </div>
+          </div>
+
+          <div className="bg-slate-900 p-10 rounded-[40px] text-white shadow-2xl relative overflow-hidden group">
+             <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none group-hover:scale-110 transition-transform duration-500">
+               <span className="text-[140px]">🏛️</span>
+             </div>
+             <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-6">Workflow Intelligence</h4>
+             <ul className="space-y-4 text-[11px] font-medium text-slate-400">
+               <li className="flex items-start gap-3">
+                 <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px]">1</span>
+                 Submission triggers calculation based on Public Holiday API.
+               </li>
+               <li className="flex items-start gap-3">
+                 <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px]">2</span>
+                 Directors authorize departmental budget and coverage.
+               </li>
+               <li className="flex items-start gap-3">
+                 <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px]">3</span>
+                 HR verifies legal quota (Art 69/70) before final commit.
+               </li>
+             </ul>
           </div>
         </div>
       </div>
