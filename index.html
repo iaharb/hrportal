@@ -39,7 +39,8 @@
     ::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
   </style>
   <script>
-    window.process = window.process || { env: { API_KEY: "" } };
+    // Ensure process.env is safely initialized without overriding potential platform-injected keys
+    window.process = window.process || { env: {} };
   </script>
 <script type="importmap">
 {
