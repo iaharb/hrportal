@@ -352,7 +352,7 @@ const PayrollView: React.FC<PayrollViewProps> = ({ user }) => {
                       </h4>
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                        <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest">High Variance ( > 5% )</span>
+                        <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest">High Variance ( &gt; 5% )</span>
                       </div>
                     </div>
                     <div className="overflow-x-auto">
