@@ -16,7 +16,7 @@ const SalaryCertificateModal: React.FC<{
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
   
   // Use payslip data if available, otherwise fallback to employee base salary
-  const basicSalary = item ? item.basic_salary : employee.salary;
+  const basicSalary = item ? item.basic_salary : (employee.salary || 0);
   const allowances = item ? item.allowances : 0;
   const deductions = item ? (item.pifss_deduction + item.deductions) : (employee.nationality === 'Kuwaiti' ? basicSalary * 0.115 : 0);
   const netSalary = basicSalary + allowances - deductions;
@@ -222,10 +222,10 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user }) => {
     fetchProfileData();
   }, [user]);
 
-  const sickUsedActual = employeeData?.leaveBalances.sickUsed || 0;
+  const sickUsedActual = employeeData?.leaveBalances?.sickUsed || 0;
   
   const availableBalances = useMemo(() => {
-    if (!employeeData) return { annual: 0, sick: 0, emergency: 0, pending: { annual: 0, sick: 0, emergency: 0 } };
+    if (!employeeData || !employeeData.leaveBalances) return { annual: 0, sick: 0, emergency: 0, pending: { annual: 0, sick: 0, emergency: 0 } };
     
     const pendingRequests = leaveHistory.filter(r => 
       ['Pending', 'Manager_Approved', 'HR_Approved', 'Resumed'].includes(r.status)
@@ -237,10 +237,12 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user }) => {
       emergency: pendingRequests.filter(r => r.type === 'Emergency').reduce((acc, curr) => acc + curr.days, 0),
     };
 
+    const bal = employeeData.leaveBalances;
+
     return {
-      annual: Math.max(0, employeeData.leaveBalances.annual - pending.annual),
-      sick: Math.max(0, employeeData.leaveBalances.sick - pending.sick),
-      emergency: Math.max(0, employeeData.leaveBalances.emergency - pending.emergency),
+      annual: Math.max(0, (bal.annual || 0) - (bal.annualUsed || 0) - pending.annual),
+      sick: Math.max(0, (bal.sick || 0) - (bal.sickUsed || 0) - pending.sick),
+      emergency: Math.max(0, (bal.emergency || 0) - (bal.emergencyUsed || 0) - pending.emergency),
       pending
     };
   }, [employeeData, leaveHistory]);
@@ -314,7 +316,6 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user }) => {
             )}
          </div>
          
-         {/* Self-Service Portal is now decoupled from the payslip check */}
          <div className="bg-white p-10 rounded-[40px] border border-slate-200 shadow-sm flex flex-col justify-between h-full">
             <div>
               <div className="flex items-center gap-3 mb-4">
@@ -478,12 +479,10 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user }) => {
                         </div>
                      </div>
                      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden relative">
-                        {/* Allocation including pending */}
                         <div 
                           className={`absolute top-0 left-0 h-full transition-all duration-1000 ${b.color === 'rose' ? 'bg-rose-500/20' : (b.color === 'emerald' ? 'bg-emerald-500/20' : 'bg-amber-500/20')}`} 
                           style={{ width: `${Math.min(100, Math.max(0, ((b.val + b.pending) / b.max) * 100))}%` }}
                         ></div>
-                        {/* Net Available */}
                         <div 
                           className={`absolute top-0 left-0 h-full transition-all duration-1000 ${b.val < 0 ? 'bg-rose-600' : `bg-${b.color}-500`}`} 
                           style={{ width: `${Math.min(100, Math.max(0, (b.val / b.max) * 100))}%` }}

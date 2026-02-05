@@ -1,51 +1,48 @@
 
--- Clean existing if necessary
-TRUNCATE TABLE leave_requests CASCADE;
-TRUNCATE TABLE employees CASCADE;
-TRUNCATE TABLE public_holidays CASCADE;
-
--- 1. Insert Employees
-INSERT INTO employees (id, name, nationality, civil_id, civil_id_expiry, izn_amal_expiry, department, position, join_date, salary, status, leave_balances, work_days_per_week)
+-- 1. INSERT/UPDATE EMPLOYEES (UPSERT)
+INSERT INTO employees (id, name, name_arabic, nationality, civil_id, civil_id_expiry, passport_number, passport_expiry, izn_amal_expiry, department, position, position_arabic, join_date, salary, status, leave_balances, work_days_per_week, iban, bank_code)
 VALUES 
-('00000000-0000-0000-0000-000000000000', 'Dr. Faisal Al-Sabah', 'Kuwaiti', '280010101234', '2026-12-31', NULL, 'Executive', 'Director', '2010-01-01', 6000, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 5),
-('11111111-1111-1111-1111-111111111111', 'Ahmed Al-Sabah', 'Kuwaiti', '285010105678', '2024-06-15', NULL, 'Executive', 'Director', '2015-01-10', 4500, 'Active', '{"annual": 22, "sick": 15, "emergency": 4, "annualUsed": 8, "sickUsed": 0, "emergencyUsed": 2}', 5),
-('55555555-5555-5555-5555-555555555555', 'Layla Al-Fadhli', 'Kuwaiti', '290031209876', '2025-01-20', NULL, 'HR', 'HR Specialist', '2017-03-12', 2800, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 4, "sickUsed": 1, "emergencyUsed": 0}', 5),
-('22222222-2222-2222-2222-222222222222', 'Sarah Al-Ghanim', 'Kuwaiti', '295052001122', '2024-04-10', NULL, 'IT', 'IT Manager', '2018-05-20', 3200, 'Active', '{"annual": 18, "sick": 12, "emergency": 5, "annualUsed": 12, "sickUsed": 3, "emergencyUsed": 1}', 5),
-('33333333-3333-3333-3333-333333333333', 'John Doe', 'Expat', '289031503344', '2025-05-15', '2024-05-01', 'IT', 'Systems Architect', '2019-03-15', 2800, 'Active', '{"annual": 10, "sick": 14, "emergency": 2, "annualUsed": 20, "sickUsed": 1, "emergencyUsed": 4}', 6),
-('44444444-4444-4444-4444-444444444444', 'Raj Patel', 'Expat', '292021005566', '2024-12-01', '2024-12-01', 'IT', 'Senior Developer', '2020-02-10', 2400, 'Active', '{"annual": 25, "sick": 15, "emergency": 6, "annualUsed": 5, "sickUsed": 0, "emergencyUsed": 0}', 6),
-('99999999-9999-9999-9999-999999999999', 'Yousef Al-Enezi', 'Kuwaiti', '303090107788', '2024-05-25', NULL, 'IT', 'Junior Dev', '2023-09-01', 1500, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 5)
-ON CONFLICT (id) DO UPDATE SET 
-  name = EXCLUDED.name, 
+('00000000-0000-0000-0000-000000000000', 'Dr. Faisal Al-Sabah', 'د. فيصل الصباح', 'Kuwaiti', '280010101234', '2026-12-31', 'K1000001', '2028-01-01', NULL, 'Executive', 'Director', 'مدير', '2010-01-01', 6500, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 5, 'KW001234567890123456789012', 'NBK'),
+('11111111-1111-1111-1111-111111111111', 'Ahmed Al-Sabah', 'أحمد الصباح', 'Kuwaiti', '285010105678', '2024-06-15', 'K1000002', '2024-12-31', NULL, 'Executive', 'Deputy Director', 'نائب مدير', '2015-01-10', 4500, 'Active', '{"annual": 22, "sick": 15, "emergency": 4, "annualUsed": 8, "sickUsed": 0, "emergencyUsed": 2}', 5, 'KW001234567890123456789013', 'NBK'),
+('55555555-5555-5555-5555-555555555555', 'Layla Al-Fadhli', 'ليلى الفضلي', 'Kuwaiti', '290031209876', '2025-01-20', 'K1000003', '2027-01-01', NULL, 'HR', 'HR Director', 'مدير الموارد البشرية', '2017-03-12', 3200, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 4, "sickUsed": 1, "emergencyUsed": 0}', 5, 'KW001234567890123456789014', 'KFH'),
+('22222222-2222-2222-2222-222222222222', 'Sarah Al-Ghanim', 'سارة الغانم', 'Kuwaiti', '295052001122', '2026-04-10', 'K1000004', '2026-01-01', NULL, 'IT', 'IT Manager', 'مدير تقنية معلومات', '2018-05-20', 3800, 'Active', '{"annual": 18, "sick": 12, "emergency": 5, "annualUsed": 12, "sickUsed": 3, "emergencyUsed": 1}', 5, 'KW001234567890123456789015', 'NBK'),
+('33333333-3333-3333-3333-333333333333', 'John Doe', 'جون دو', 'Expat', '289031503344', '2025-05-15', 'P500001', '2024-03-20', '2024-04-01', 'IT', 'Systems Architect', 'مهندس أنظمة', '2019-03-15', 2800, 'Active', '{"annual": 10, "sick": 14, "emergency": 2, "annualUsed": 20, "sickUsed": 1, "emergencyUsed": 4}', 6, 'KW001234567890123456789016', 'BURGAN'),
+('00000000-0000-0000-0000-000000000001', 'Mariam Al-Kandari', 'مريم الكندري', 'Kuwaiti', '292081501122', '2025-11-01', 'K1000005', '2029-01-01', NULL, 'Finance', 'Finance Head', 'رئيس المالية', '2016-08-15', 3400, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 5, 'KW001234567890123456789017', 'KFH'),
+('00000000-0000-0000-0000-000000000002', 'Bader Al-Mutairi', 'بدر المطيري', 'Kuwaiti', '294112003344', '2024-05-30', 'K1000006', '2024-06-01', NULL, 'Finance', 'Senior Auditor', 'مدقق مالي', '2019-11-20', 2600, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 2, "sickUsed": 0, "emergencyUsed": 0}', 5, 'KW001234567890123456789018', 'NBK'),
+('00000000-0000-0000-0000-000000000003', 'Chloe Smith', 'كلوي سميث', 'Expat', '296021405566', '2025-08-12', 'P500002', '2025-02-01', '2025-02-15', 'Sales', 'Account Director', 'مدير حسابات', '2021-02-14', 2900, 'Active', '{"annual": 25, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 6, 'KW001234567890123456789019', 'NBK'),
+('00000000-0000-0000-0000-000000000004', 'Ali Hassan', 'علي حسن', 'Expat', '290060107788', '2024-04-22', 'P500003', '2026-01-01', '2024-05-01', 'Operations', 'Logistics Lead', 'رئيس الخدمات اللوجستية', '2018-06-01', 1800, 'Active', '{"annual": 20, "sick": 15, "emergency": 6, "annualUsed": 5, "sickUsed": 0, "emergencyUsed": 0}', 6, 'KW001234567890123456789020', 'KFH'),
+('00000000-0000-0000-0000-000000000005', 'Fatima Al-Zahra', 'فاطمة الزهراء', 'Kuwaiti', '298091009900', '2027-10-10', 'K1000007', '2030-01-01', NULL, 'HR', 'Recruitment Manager', 'مدير توظيف', '2020-09-10', 2800, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 5, 'KW001234567890123456789021', 'NBK'),
+('00000000-0000-0000-0000-000000000006', 'David Miller', 'ديفيد ميلر', 'Expat', '295030101122', '2025-03-01', 'P500004', '2024-04-05', '2025-03-01', 'IT', 'Cloud Engineer', 'مهندس سحابي', '2022-03-01', 3100, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 6, 'KW001234567890123456789022', 'KFH'),
+('00000000-0000-0000-0000-000000000007', 'Hessa Al-Majed', 'حصة الماجد', 'Kuwaiti', '296111503344', '2024-05-15', 'K1000008', '2024-07-01', NULL, 'Sales', 'Sales Executive', 'مسؤول مبيعات', '2022-11-15', 1400, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 5, 'KW001234567890123456789023', 'NBK'),
+('00000000-0000-0000-0000-000000000008', 'Mubarak Al-Rashidi', 'مبارك الرشيدي', 'Kuwaiti', '288041005566', '2026-04-10', 'K1000009', '2026-05-01', NULL, 'Operations', 'Safety Officer', 'مسؤول سلامة', '2015-04-10', 2200, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 10, "sickUsed": 4, "emergencyUsed": 1}', 5, 'KW001234567890123456789024', 'BURGAN'),
+('00000000-0000-0000-0000-000000000009', 'Aisha Al-Otaibi', 'عائشة العتيبي', 'Kuwaiti', '302010507788', '2028-01-05', 'K1000010', '2031-01-01', NULL, 'Finance', 'Accountant', 'محاسب', '2023-01-05', 1800, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 5, 'KW001234567890123456789025', 'NBK'),
+('00000000-0000-0000-0000-000000000010', 'Robert Wilson', 'روبرت ويلسون', 'Expat', '293072009900', '2025-07-20', 'P500005', '2024-05-01', '2025-07-20', 'IT', 'Security Lead', 'رئيس أمن', '2019-07-20', 3500, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 6, 'KW001234567890123456789026', 'KFH'),
+('00000000-0000-0000-0000-000000000011', 'Noura Al-Saeed', 'نورة السعيد', 'Kuwaiti', '297100101122', '2026-10-01', 'K1000011', '2027-01-01', NULL, 'Sales', 'Marketing Lead', 'رئيس تسويق', '2021-10-01', 2700, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 5, 'KW001234567890123456789027', 'NBK'),
+('00000000-0000-0000-0000-000000000012', 'Khaled Al-Enezi', 'خالد العنزي', 'Kuwaiti', '291121203344', '2024-12-12', 'K1000012', '2025-01-01', NULL, 'Operations', 'Fleet Manager', 'مدير أسطول', '2016-12-12', 2900, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 5, "sickUsed": 0, "emergencyUsed": 0}', 5, 'KW001234567890123456789028', 'KFH'),
+('00000000-0000-0000-0000-000000000013', 'Samantha Brown', 'سامانثا براون', 'Expat', '299051505566', '2025-05-15', 'P500006', '2024-11-15', '2025-05-15', 'HR', 'Culture Specialist', 'أخصائي ثقافة', '2022-05-15', 2100, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 6, 'KW001234567890123456789029', 'BURGAN'),
+('00000000-0000-0000-0000-000000000014', 'Jassem Al-Bahr', 'جاسم البحر', 'Kuwaiti', '280010100000', '2027-01-01', 'K1000013', '2028-01-01', NULL, 'Executive', 'Advisor', 'مستشار', '2012-01-01', 5000, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 5, 'KW001234567890123456789030', 'NBK'),
+('00000000-0000-0000-0000-000000000015', 'Elena Petrova', 'إيلينا بتروفا', 'Expat', '297032001122', '2025-03-20', 'P500007', '2024-04-10', '2025-03-20', 'Operations', 'Quality Control', 'مراقب جودة', '2020-03-20', 1950, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 6, 'KW001234567890123456789031', 'NBK'),
+('00000000-0000-0000-0000-000000000016', 'Omar Al-Farsi', 'عمر الفارسي', 'Kuwaiti', '300061503344', '2028-06-15', 'K1000014', '2030-01-01', NULL, 'IT', 'DevOps Engineer', 'مهندس ديف أوبس', '2023-06-15', 2200, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 5, 'KW001234567890123456789032', 'KFH'),
+('00000000-0000-0000-0000-000000000017', 'Dana Al-Salem', 'دانة السالم', 'Kuwaiti', '298090105566', '2024-09-01', 'K1000015', '2024-11-01', NULL, 'Finance', 'Financial Analyst', 'محلل مالي', '2022-09-01', 1900, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 5, 'KW001234567890123456789033', 'KFH'),
+('00000000-0000-0000-0000-000000000018', 'Michael Chen', 'مايكل تشن', 'Expat', '293111107788', '2025-11-11', 'P500008', '2024-05-15', '2025-11-11', 'Sales', 'Regional Manager', 'مدير إقليمي', '2017-11-11', 4200, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 15, "sickUsed": 0, "emergencyUsed": 0}', 6, 'KW001234567890123456789034', 'NBK'),
+('00000000-0000-0000-0000-000000000019', 'Yousef Al-Enezi', 'يوسف العنزي', 'Kuwaiti', '303052509900', '2024-05-25', 'K1000016', '2024-06-01', NULL, 'IT', 'Junior Developer', 'مطور جونيور', '2023-09-01', 1500, 'Active', '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}', 5, 'KW001234567890123456789035', 'NBK'),
+('00000000-0000-0000-0000-000000000020', 'Raj Patel', 'راج باتيل', 'Expat', '295120101122', '2024-12-01', 'P500009', '2026-01-01', '2024-12-01', 'IT', 'Senior Developer', 'مطور أول', '2020-02-10', 2400, 'Active', '{"annual": 25, "sick": 15, "emergency": 6, "annualUsed": 5, "sickUsed": 0, "emergencyUsed": 0}', 6, 'KW001234567890123456789036', 'KFH')
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  name_arabic = EXCLUDED.name_arabic,
   nationality = EXCLUDED.nationality,
   civil_id = EXCLUDED.civil_id,
-  salary = EXCLUDED.salary;
-
--- 2. Insert Public Holidays
-INSERT INTO public_holidays (id, name, date, type, is_fixed)
-VALUES 
-('13', 'New Year Day 2025', '2025-01-01', 'National', true),
-('14', 'National Day 2025', '2025-02-25', 'National', true),
-('15', 'Liberation Day 2025', '2025-02-26', 'National', true),
-('16', 'New Year Day 2026', '2026-01-01', 'National', true),
-('17', 'National Day 2026', '2026-02-25', 'National', true),
-('18', 'Liberation Day 2026', '2026-02-26', 'National', true),
-('19', 'Bridge Holiday 2026', '2026-03-01', 'National', false)
-ON CONFLICT (id) DO UPDATE SET 
-  date = EXCLUDED.date,
-  name = EXCLUDED.name;
-
--- 3. Insert Dept Configs
-INSERT INTO department_configs (dept_name, target_ratio, headcount_goal)
-VALUES 
-('Executive', 50, 5),
-('IT', 40, 15),
-('HR', 60, 10),
-('Sales', 25, 30)
-ON CONFLICT (dept_name) DO UPDATE SET target_ratio = EXCLUDED.target_ratio;
-
--- 4. Insert Announcements
-INSERT INTO announcements (title, content, priority)
-VALUES 
-('Workforce Strategy 2026', 'Focusing on the March 1st holiday transition and Q1 training modules.', 'Normal'),
-('Article 69 Updates', 'Important: New sick leave deduction thresholds are now live in the system.', 'High'),
-('PAM Quota Alert', 'Executive department has reached 100% Kuwaitization goal! 🎉', 'Urgent');
+  civil_id_expiry = EXCLUDED.civil_id_expiry,
+  passport_number = EXCLUDED.passport_number,
+  passport_expiry = EXCLUDED.passport_expiry,
+  izn_amal_expiry = EXCLUDED.izn_amal_expiry,
+  department = EXCLUDED.department,
+  position = EXCLUDED.position,
+  position_arabic = EXCLUDED.position_arabic,
+  join_date = EXCLUDED.join_date,
+  salary = EXCLUDED.salary,
+  status = EXCLUDED.status,
+  leave_balances = EXCLUDED.leave_balances,
+  work_days_per_week = EXCLUDED.work_days_per_week,
+  iban = EXCLUDED.iban,
+  bank_code = EXCLUDED.bank_code;

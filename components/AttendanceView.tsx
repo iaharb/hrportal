@@ -128,6 +128,11 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
                    <p className={`text-xl font-black ${activeZone ? 'text-slate-900' : 'text-slate-300'}`}>
                      {detecting ? 'Scanning GPS...' : (activeZone ? activeZone.name : 'Unknown Territory')}
                    </p>
+                   {!activeZone && currentLocation && !detecting && (
+                     <p className="text-[10px] font-mono font-bold text-rose-400 mt-2">
+                       RAW: {currentLocation.latitude.toFixed(4)}, {currentLocation.longitude.toFixed(4)}
+                     </p>
+                   )}
                 </div>
               </div>
 
@@ -141,7 +146,7 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
                 <p className={`text-xs font-medium leading-relaxed ${activeZone ? 'text-emerald-800' : 'text-rose-800'}`}>
                   {activeZone 
                     ? `You are currently within the ${activeZone.radius}m secure radius for ${activeZone.name}. Access granted.`
-                    : 'System requires active GPS signal within Shuwaikh, Sulaibiya or HQ to enable Attendance logging.'}
+                    : 'System requires active GPS signal within an authorized corporate perimeter to enable attendance logging.'}
                 </p>
               </div>
 
@@ -184,13 +189,22 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
             </div>
           </div>
 
-          <div className="bg-indigo-600 p-10 rounded-[48px] text-white shadow-xl shadow-indigo-600/20 relative overflow-hidden group">
-             <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
-               <span className="text-[120px]">🛡️</span>
+          {/* Zone Registry Card */}
+          <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm">
+             <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6">Authorized Registry</h4>
+             <div className="space-y-4">
+                {OFFICE_LOCATIONS.map((loc) => (
+                  <div key={loc.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div>
+                      <p className="text-xs font-black text-slate-900">{loc.name}</p>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">Secure Radius: {loc.radius}m</p>
+                    </div>
+                    <span className="text-xl">📍</span>
+                  </div>
+                ))}
              </div>
-             <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-6">Security Disclosure</h4>
-             <p className="text-sm font-medium leading-relaxed opacity-90 relative z-10">
-               Attendance is strictly geofenced per labor regulations. Attempting to clock in from unauthorized locations or using GPS spoofing will trigger an automated HR integrity audit.
+             <p className="mt-6 text-[9px] text-slate-400 font-medium italic text-center">
+               Zones are defined by PAM regulations for on-site workforce verification.
              </p>
           </div>
         </div>

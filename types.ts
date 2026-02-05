@@ -22,6 +22,7 @@ export interface LeaveBalances {
 export interface Employee {
   id: string;
   name: string;
+  nameArabic?: string;
   nationality: 'Kuwaiti' | 'Expat';
   civilId?: string;
   civilIdExpiry?: string;
@@ -31,6 +32,7 @@ export interface Employee {
   iznAmalExpiry?: string; // New field for Work Permit
   department: string;
   position: string;
+  positionArabic?: string;
   joinDate: string;
   salary: number;
   status: 'Active' | 'On Leave' | 'Terminated';
@@ -41,6 +43,8 @@ export interface Employee {
   workDaysPerWeek: number;
   pifssStatus?: 'Registered' | 'Pending' | 'Exempt';
   lastResetYear?: number;
+  iban?: string;
+  bankCode?: string;
 }
 
 export interface AttendanceRecord {
@@ -189,7 +193,8 @@ export enum View {
   Leaves = 'leaves',
   Payroll = 'payroll',
   Settlement = 'settlement',
-  Attendance = 'attendance'
+  Attendance = 'attendance',
+  AdminCenter = 'admin-center'
 }
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';

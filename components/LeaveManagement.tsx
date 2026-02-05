@@ -88,9 +88,11 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({ user }) => {
     fetchData();
   }, [user]);
 
-  // Derived available balances accounting for pending requests
   const availableBalances = useMemo(() => {
-    if (!employeeData) return { annual: 0, sick: 0, emergency: 0, pending: { annual: 0, sick: 0, emergency: 0 } };
+    // CRITICAL: Robust fallback to prevent 'undefined.annual' crash
+    if (!employeeData || !employeeData.leaveBalances) {
+      return { annual: 0, sick: 0, emergency: 0, pending: { annual: 0, sick: 0, emergency: 0 } };
+    }
     
     const pendingRequests = personalRequests.filter(r => 
       ['Pending', 'Manager_Approved', 'HR_Approved', 'Resumed'].includes(r.status)
@@ -102,10 +104,12 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({ user }) => {
       emergency: pendingRequests.filter(r => r.type === 'Emergency').reduce((acc, curr) => acc + curr.days, 0),
     };
 
+    const balances = employeeData.leaveBalances;
+
     return {
-      annual: Math.max(0, employeeData.leaveBalances.annual - pending.annual),
-      sick: Math.max(0, employeeData.leaveBalances.sick - pending.sick),
-      emergency: Math.max(0, employeeData.leaveBalances.emergency - pending.emergency),
+      annual: Math.max(0, (balances.annual || 0) - (balances.annualUsed || 0) - pending.annual),
+      sick: Math.max(0, (balances.sick || 0) - (balances.sickUsed || 0) - pending.sick),
+      emergency: Math.max(0, (balances.emergency || 0) - (balances.emergencyUsed || 0) - pending.emergency),
       pending
     };
   }, [employeeData, personalRequests]);
@@ -124,15 +128,15 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({ user }) => {
     let current = new Date(start.getTime());
     while (current <= end) {
       const dayOfWeek = current.getDay();
-      const dateStr = current.toISOString().split('T')[0];
+      const dateStr = current.toLocaleDateString('en-CA'); 
       const holiday = publicHolidays.find(h => h.date === dateStr);
 
       if (dayOfWeek === 5) {
-        weekendsFound.push(`${dateStr} (Friday - Always Skipped)`);
+        weekendsFound.push(`${dateStr} (Friday)`);
+      } else if (dayOfWeek === 6 && isFiveDayWorker) {
+        weekendsFound.push(`${dateStr} (Saturday)`);
       } else if (holiday) {
         holidaysFound.push(`${dateStr} (${holiday.name})`);
-      } else if (dayOfWeek === 6 && isFiveDayWorker) {
-        total++;
       } else {
         total++;
       }
@@ -162,7 +166,8 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({ user }) => {
         reason: formData.reason,
         status: 'Pending',
         managerId: employeeData?.managerId || '00000000-0000-0000-0000-000000000000',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        history: []
       }, user);
       setShowForm(false);
       setFormData({ type: 'Annual', startDate: '', endDate: '', reason: '' });
@@ -337,7 +342,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({ user }) => {
                     
                     <div className="mt-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
                        <p className="text-[10px] text-indigo-700 font-bold">
-                         ℹ️ Note: Saturdays are counted as leave days for 5-day week workers if they fall within the leave range, per company policy.
+                         ℹ️ Note: Saturdays are counted as leave days for 6-day workers. For 5-day workers, Saturdays and Fridays are skipped.
                        </p>
                     </div>
                   </div>
@@ -534,12 +539,10 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({ user }) => {
                         </div>
                      </div>
                      <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden relative">
-                        {/* The Actual Allocation */}
                         <div 
                           className={`absolute top-0 left-0 h-full transition-all duration-1000 ${b.color === 'rose' ? 'bg-rose-500/30' : (b.color === 'emerald' ? 'bg-emerald-500/30' : 'bg-amber-500/30')}`} 
                           style={{ width: `${Math.min(100, (((b.val + b.pending)) / b.max) * 100)}%` }}
                         ></div>
-                        {/* The Net Available */}
                         <div 
                           className={`absolute top-0 left-0 h-full transition-all duration-1000 ${b.color === 'rose' ? 'bg-rose-500' : (b.color === 'emerald' ? 'bg-emerald-500' : 'bg-amber-500')}`} 
                           style={{ width: `${Math.min(100, (b.val / b.max) * 100)}%` }}
