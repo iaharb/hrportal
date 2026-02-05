@@ -1,22 +1,12 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Standard initialization as per SDK guidelines
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || (window as any).process?.env?.API_KEY || "" });
+// Initialize using the mandated environment variable pattern
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const ADMIN_SYSTEM_INSTRUCTION = `You are an expert HR Operations Admin Assistant. Your primary mission is to ensure data integrity, record accuracy, and compliance within the HR portal. Always prioritize GDPR and data privacy. Before suggesting any data modification, verify if an audit trail is required. If data is ambiguous, ask clarifying questions rather than guessing. You communicate professionally and concisely.`;
 
 export const getKuwaitizationInsights = async (employeeData: string) => {
-  // Guard against missing API key to prevent crashing the entire module
-  if (!process.env.API_KEY && !(window as any).process?.env?.API_KEY) {
-    console.error("Gemini API Key is missing. Check your environment variables.");
-    return {
-      summary: "Registry intelligence is currently offline due to missing configuration.",
-      recommendations: ["Contact system administrator to verify API_KEY linkage."],
-      complianceStatus: "Warning"
-    };
-  }
-
   const prompt = `
     Analyze the following employee data in the context of Kuwait's nationalization (Kuwaitization) policy.
     The goal is to increase Kuwaiti national participation in the private sector.
@@ -57,8 +47,8 @@ export const getKuwaitizationInsights = async (employeeData: string) => {
   } catch (error) {
     console.error("Gemini Insight Error:", error);
     return {
-      summary: "Error generating AI insights. Please check API key configuration.",
-      recommendations: ["Ensure your environment variables are set correctly."],
+      summary: "Registry intelligence is currently processing or offline. Please verify API_KEY in deployment settings.",
+      recommendations: ["Check Vercel project environment variables for API_KEY."],
       complianceStatus: "Warning"
     };
   }

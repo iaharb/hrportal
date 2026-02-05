@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   define: {
-    'process.env': process.env
+    // Stringify ensures the key is treated as a literal string in the generated code
+    'process.env.API_KEY': JSON.stringify(process.env.API_KEY)
   }
 });

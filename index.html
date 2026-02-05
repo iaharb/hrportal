@@ -39,7 +39,7 @@
     ::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
   </style>
   <script>
-    // Ensure process.env is safely initialized without overriding potential platform-injected keys
+    // Polyfill for process.env in environments where it might be accessed but not fully defined
     window.process = window.process || { env: {} };
   </script>
 <script type="importmap">
