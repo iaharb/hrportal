@@ -34,7 +34,7 @@ const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ user, onAddClick,
 
   useEffect(() => {
     fetchEmployees();
-  }, [user]);
+  }, [user.id, user.department]); // Optimized dependency array
 
   const handleStatusChange = async (employeeId: string, newStatus: Employee['status']) => {
     setUpdatingId(employeeId);
@@ -44,7 +44,7 @@ const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ user, onAddClick,
         emp.id === employeeId ? { ...emp, status: newStatus } : emp
       ));
     } catch (err: any) {
-      alert("Sync Error");
+      console.error("Status update failed", err);
     } finally {
       setUpdatingId(null);
     }
@@ -115,7 +115,6 @@ const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ user, onAddClick,
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-slate-50/50 text-[11px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
-                  {/* Fix: Replaced 'width="100"' with 'style={{ width: '100px' }}' to resolve TypeScript error */}
                   <th className="px-10 py-8 text-center" style={{ width: '100px' }}>#</th>
                   <th className="px-10 py-8">{t.nameEn} / {t.nameAr}</th>
                   <th className="px-10 py-8">{t.documentHealth}</th>
@@ -159,9 +158,9 @@ const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ user, onAddClick,
                             onChange={(e) => handleStatusChange(emp.id, e.target.value as Employee['status'])}
                             className="text-[10px] font-black uppercase tracking-widest rounded-xl px-5 py-2.5 bg-white border border-slate-200 shadow-sm"
                           >
-                            <option value="Active">{t.active}</option}
-                            <option value="On Leave">{t.onLeave}</option}
-                            <option value="Terminated">{t.terminated}</option}
+                            <option value="Active">{t.active}</option>
+                            <option value="On Leave">{t.onLeave}</option>
+                            <option value="Terminated">{t.terminated}</option>
                           </select>
                         ) : (
                           <span className={`text-[10px] font-black uppercase tracking-widest ${emp.status === 'Active' ? 'text-emerald-600' : 'text-slate-400'}`}>
