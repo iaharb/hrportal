@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, User } from '../types.ts';
-import { translations } from '../translations.ts';
 import { dbService } from '../services/dbService.ts';
+import { useTranslation } from 'react-i18next';
 
 interface SidebarProps {
   currentView: View;
@@ -11,10 +11,11 @@ interface SidebarProps {
   language: 'en' | 'ar';
   setLanguage: (lang: 'en' | 'ar') => void;
   onLogout: () => void;
+  onToggleMobile?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, language, setLanguage, onLogout }) => {
-  const t = translations[language];
+const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, language, setLanguage, onLogout, onToggleMobile }) => {
+  const { t } = useTranslation();
   const [dbStatus, setDbStatus] = useState<{ type: 'testing' | 'live' | 'mock', latency?: number }>({ type: 'testing' });
 
   const checkConnection = async () => {
@@ -28,28 +29,27 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, language,
 
   useEffect(() => {
     checkConnection();
-    // Auto-recheck every 2 minutes
     const interval = setInterval(checkConnection, 120000);
     return () => clearInterval(interval);
   }, []);
   
   const allItems = [
-    { id: View.Dashboard, label: t.dashboard, icon: '📊', roles: ['Admin', 'Manager', 'HR'] },
-    { id: View.AdminCenter, label: t.adminCenter, icon: '🛡️', roles: ['Admin', 'HR'] },
-    { id: View.Profile, label: t.profile, icon: '👤', roles: ['Employee', 'Manager', 'Admin', 'HR'] },
-    { id: View.Attendance, label: t.attendance, icon: '📍', roles: ['Employee', 'Manager', 'Admin', 'HR'] },
-    { id: View.Leaves, label: t.leaves, icon: '📅', roles: ['Admin', 'Manager', 'Employee', 'HR'] },
-    { id: View.Directory, label: t.directory, icon: '👥', roles: ['Admin', 'Manager', 'HR'] },
-    { id: View.Payroll, label: t.payroll, icon: '💰', roles: ['Admin', 'HR'] },
-    { id: View.Settlement, label: t.settlement, icon: '📜', roles: ['Admin', 'HR'] },
-    { id: View.Insights, label: t.insights, icon: '✨', roles: ['Admin', 'Manager', 'HR'] },
-    { id: View.Compliance, label: t.compliance, icon: '⚖️', roles: ['Admin', 'HR'] },
+    { id: View.Dashboard, label: t('dashboard'), icon: '📊', roles: ['Admin', 'Manager', 'HR'] },
+    { id: View.AdminCenter, label: t('adminCenter'), icon: '🛡️', roles: ['Admin', 'HR'] },
+    { id: View.Profile, label: t('profile'), icon: '👤', roles: ['Employee', 'Manager', 'Admin', 'HR'] },
+    { id: View.Attendance, label: t('attendance'), icon: '📍', roles: ['Employee', 'Manager', 'Admin', 'HR'] },
+    { id: View.Leaves, label: t('leaves'), icon: '📅', roles: ['Admin', 'Manager', 'Employee', 'HR'] },
+    { id: View.Directory, label: t('directory'), icon: '👥', roles: ['Admin', 'Manager', 'HR'] },
+    { id: View.Payroll, label: t('payroll'), icon: '💰', roles: ['Admin', 'HR'] },
+    { id: View.Settlement, label: t('settlement'), icon: '📜', roles: ['Admin', 'HR'] },
+    { id: View.Insights, label: t('insights'), icon: '✨', roles: ['Admin', 'Manager', 'HR'] },
+    { id: View.Compliance, label: t('compliance'), icon: '⚖️', roles: ['Admin', 'HR'] },
   ];
 
   const filteredItems = allItems.filter(item => item.roles.includes(user.role));
 
   return (
-    <div className={`w-72 bg-white border-${language === 'ar' ? 'l' : 'r'} border-slate-200 h-screen sticky top-0 flex flex-col z-[80]`}>
+    <div className="w-80 bg-white border-e border-slate-200 h-screen sticky top-0 flex flex-col z-[80]">
       <div className="p-8 border-b border-slate-100">
         <h1 className="text-2xl font-black text-slate-900 flex items-center gap-3">
           <span className="p-2 bg-emerald-500 text-white rounded-2xl shadow-lg shadow-emerald-500/20">🇰🇼</span> 
@@ -59,14 +59,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, language,
           onClick={checkConnection}
           className="flex items-center gap-2 mt-4 group cursor-pointer hover:opacity-80 transition-opacity"
         >
-          <div className={`w-2 h-2 rounded-full ${
+          <div className={`w-2.5 h-2.5 rounded-full ${
             dbStatus.type === 'testing' ? 'bg-slate-300 animate-pulse' : 
             dbStatus.type === 'live' ? (dbStatus.latency && dbStatus.latency > 500 ? 'bg-amber-400' : 'bg-emerald-500 animate-pulse') : 'bg-rose-500'
           }`}></div>
-          <p className="text-[9px] text-slate-400 font-black tracking-[0.2em] uppercase opacity-80 flex items-center gap-2">
-            {dbStatus.type === 'testing' ? 'Syncing...' : 
-             dbStatus.type === 'live' ? `Registry Link: ${dbStatus.latency}ms` : 'Registry Offline'}
-            <span className="opacity-0 group-hover:opacity-100 transition-opacity">🔄</span>
+          <p className="text-[10px] text-slate-400 font-black tracking-[0.2em] uppercase opacity-80 flex items-center gap-2">
+            {dbStatus.type === 'testing' ? t('syncing') : 
+             dbStatus.type === 'live' ? `${t('origin')}: ${dbStatus.latency}ms` : t('unknown')}
           </p>
         </button>
       </div>
@@ -83,12 +82,21 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, language,
             }`}
           >
             <span className={`text-xl transition-transform group-hover:scale-110 ${currentView === item.id ? '' : 'grayscale'}`}>{item.icon}</span>
-            {item.label}
+            <span className="text-[15px]">{item.label}</span>
           </button>
         ))}
       </nav>
 
       <div className="p-6 space-y-4">
+        {onToggleMobile && (
+          <button 
+            onClick={onToggleMobile}
+            className="w-full py-4 bg-indigo-50 border border-indigo-100 rounded-2xl text-[10px] font-black text-indigo-600 hover:bg-indigo-100 transition-all uppercase tracking-[0.2em] flex items-center justify-center gap-3"
+          >
+            <span>📱</span> {t('switchToMobile')}
+          </button>
+        )}
+
         <div className="flex bg-slate-100 p-1 rounded-2xl">
           <button 
             onClick={() => setLanguage('en')}
@@ -110,7 +118,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, language,
                 {user.name[0]}
              </div>
              <div className="min-w-0 flex-1">
-               <p className="text-xs font-black text-slate-900 truncate tracking-tight">{user.name}</p>
+               <p className="text-[13px] font-bold text-slate-900 truncate tracking-tight">{language === 'ar' ? (user as any).nameArabic || user.name : user.name}</p>
                <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{user.role}</p>
              </div>
            </div>
@@ -118,7 +126,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, language,
              onClick={onLogout}
              className="w-full py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black text-slate-500 hover:text-rose-600 hover:border-rose-100 hover:bg-rose-50/50 transition-all uppercase tracking-[0.2em] shadow-sm"
            >
-             {t.terminateSession}
+             {t('terminateSession')}
            </button>
         </div>
       </div>

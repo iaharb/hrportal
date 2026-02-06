@@ -3,6 +3,20 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { NotificationProvider } from './components/NotificationSystem.tsx';
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import { resources } from './translations.ts';
+
+i18n
+  .use(initReactI18next)
+  .init({
+    resources,
+    lng: 'en',
+    fallbackLng: 'en',
+    interpolation: {
+      escapeValue: false
+    }
+  });
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

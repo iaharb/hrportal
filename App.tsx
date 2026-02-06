@@ -13,29 +13,56 @@ import AttendanceView from './components/AttendanceView.tsx';
 import AdminCenter from './components/AdminCenter.tsx';
 import AddEmployeeModal from './components/AddEmployeeModal.tsx';
 import Login from './components/Login.tsx';
+import MobileApp from './mobile/App.tsx';
+import MobileLogin from './mobile/Login.tsx';
 import { View, User, Notification } from './types.ts';
 import { dbService } from './services/dbService.ts';
-import { translations } from './translations.ts';
+import { useTranslation } from 'react-i18next';
 
 const App: React.FC = () => {
+  const { t, i18n } = useTranslation();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setView] = useState<View>(View.Dashboard);
-  const [language, setLanguage] = useState<'en' | 'ar'>('en');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>(window.innerWidth < 768 ? 'mobile' : 'desktop');
   const notificationRef = useRef<HTMLDivElement>(null);
 
-  const t = translations[language];
+  const language = i18n.language as 'en' | 'ar';
 
-  // Logic to resolve CamelCase translation key from kebab-case View enum
-  const getViewTitle = (view: string) => {
-    const key = view.includes('-') 
-      ? view.split('-').map((s, i) => i === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1)).join('')
-      : view;
-    return (t as any)[key] || view;
+  const setLanguage = (lang: 'en' | 'ar') => {
+    i18n.changeLanguage(lang);
   };
+
+  const getViewTitle = (view: View) => {
+    switch (view) {
+      case View.Dashboard: return t('dashboard');
+      case View.Directory: return t('directory');
+      case View.Insights: return t('insights');
+      case View.Compliance: return t('compliance');
+      case View.Profile: return t('profile');
+      case View.Leaves: return t('leaves');
+      case View.Payroll: return t('payroll');
+      case View.Settlement: return t('settlement');
+      case View.Attendance: return t('attendance');
+      case View.AdminCenter: return t('adminCenter');
+      default: return '';
+    }
+  };
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768 && viewMode === 'desktop') {
+        setViewMode('mobile');
+      } else if (window.innerWidth >= 768 && viewMode === 'mobile' && !localStorage.getItem('force_mobile')) {
+        setViewMode('desktop');
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [viewMode]);
 
   useEffect(() => {
     if (currentUser) {
@@ -47,16 +74,6 @@ const App: React.FC = () => {
       fetchNotifications();
     }
   }, [currentUser]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
-        setShowNotifications(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const fetchNotifications = async () => {
     if (currentUser) {
@@ -74,12 +91,62 @@ const App: React.FC = () => {
     fetchNotifications();
   };
 
-  const renderView = () => {
-    if (!currentUser) return null;
+  const toggleViewMode = () => {
+    const nextMode = viewMode === 'desktop' ? 'mobile' : 'desktop';
+    setViewMode(nextMode);
+    if (nextMode === 'mobile') {
+      localStorage.setItem('force_mobile', 'true');
+    } else {
+      localStorage.removeItem('force_mobile');
+    }
+  };
 
+  if (viewMode === 'mobile') {
+    if (!currentUser) {
+      return (
+        <MobileLogin 
+          onLogin={setCurrentUser} 
+          language={language} 
+          setLanguage={setLanguage} 
+          onSwitchToDesktop={() => {
+            localStorage.removeItem('force_mobile');
+            setViewMode('desktop');
+          }}
+        />
+      );
+    }
+    return (
+      <MobileApp 
+        user={currentUser} 
+        language={language} 
+        setLanguage={setLanguage} 
+        onLogout={() => setCurrentUser(null)}
+        onSwitchToDesktop={() => {
+          localStorage.removeItem('force_mobile');
+          setViewMode('desktop');
+        }}
+      />
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="relative min-h-screen" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+         <Login onLogin={setCurrentUser} language={language} />
+         <button 
+           onClick={() => setViewMode('mobile')}
+           className={`fixed top-6 ${language === 'ar' ? 'left-6' : 'right-6'} z-[100] bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl`}
+         >
+           📱 {language === 'ar' ? 'خدمة الهاتف' : 'Mobile ESS'}
+         </button>
+      </div>
+    );
+  }
+
+  const renderView = () => {
     switch (currentView) {
       case View.Dashboard:
-        return <Dashboard user={currentUser} onNavigate={setView} key={`dash-${refreshKey}`} />;
+        return <Dashboard user={currentUser} onNavigate={setView} key={`dash-${refreshKey}`} language={language} />;
       case View.Directory:
         return <EmployeeDirectory user={currentUser} onAddClick={() => setIsModalOpen(true)} key={`dir-${refreshKey}`} language={language} />;
       case View.Insights:
@@ -99,19 +166,15 @@ const App: React.FC = () => {
       case View.AdminCenter:
         return <AdminCenter key={`admin-${refreshKey}`} />;
       default:
-        return <Dashboard user={currentUser} onNavigate={setView} />;
+        return <Dashboard user={currentUser} onNavigate={setView} language={language} />;
     }
   };
-
-  if (!currentUser) {
-    return <Login onLogin={setCurrentUser} language={language} />;
-  }
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
     <div 
-      className={`flex min-h-screen bg-[#F8FAFC] selection:bg-emerald-100 font-sans`}
+      className={`flex min-h-screen bg-[#F8FAFC] selection:bg-emerald-100 font-sans animate-in fade-in duration-500`}
       dir={language === 'ar' ? 'rtl' : 'ltr'}
     >
       <Sidebar 
@@ -121,6 +184,7 @@ const App: React.FC = () => {
         language={language}
         setLanguage={setLanguage}
         onLogout={() => setCurrentUser(null)}
+        onToggleMobile={toggleViewMode}
       />
       
       <main className="flex-1 min-w-0">
@@ -128,7 +192,7 @@ const App: React.FC = () => {
           <div className="flex items-center justify-between mb-16">
             <div className="space-y-1">
               <nav className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">
-                <span className="hover:text-emerald-600 transition-colors cursor-pointer" onClick={() => setView(View.Dashboard)}>{t.enterprise}</span>
+                <span className="hover:text-emerald-600 transition-colors cursor-pointer" onClick={() => setView(View.Dashboard)}>{t('enterprise')}</span>
                 <span className="text-slate-200">/</span>
                 <span className="text-emerald-600">{getViewTitle(currentView)}</span>
               </nav>
@@ -147,7 +211,7 @@ const App: React.FC = () => {
                 >
                   <span className="text-2xl">🔔</span>
                   {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 w-6 h-6 bg-rose-500 text-white text-[11px] font-black rounded-full border-4 border-[#F8FAFC] flex items-center justify-center animate-bounce">
+                    <span className={`absolute -top-1 ${language === 'ar' ? '-left-1' : '-right-1'} w-6 h-6 bg-rose-500 text-white text-[11px] font-black rounded-full border-4 border-[#F8FAFC] flex items-center justify-center animate-bounce`}>
                       {unreadCount}
                     </span>
                   )}
@@ -175,7 +239,7 @@ const App: React.FC = () => {
             onClick={() => setIsModalOpen(true)}
             className="bg-slate-900 text-white px-10 py-5 rounded-[32px] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] hover:bg-black hover:scale-105 transition-all flex items-center justify-center gap-4 active:scale-95 group overflow-hidden relative"
           >
-            <span className="font-black text-[12px] uppercase tracking-widest relative z-10">{t.addMember}</span>
+            <span className="font-black text-[12px] uppercase tracking-widest relative z-10">{t('addMember')}</span>
             <span className="text-3xl font-light relative z-10 transition-transform group-hover:rotate-90">+</span>
           </button>
         </div>
