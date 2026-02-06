@@ -1,15 +1,20 @@
 
-import React, { useState, useEffect } from 'react';
-import { User, LeaveRequest, LeaveType } from '../types.ts';
+import React, { useState, useEffect, useMemo } from 'react';
+import { User, LeaveRequest, LeaveType, Employee } from '../types.ts';
 import { dbService } from '../services/dbService.ts';
 import { useNotifications } from '../components/NotificationSystem.tsx';
+import { useTranslation } from 'react-i18next';
 
 const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, language }) => {
-  const { notify } = useNotifications();
+  const { t } = useTranslation();
+  const { notify, confirm } = useNotifications();
   const [history, setHistory] = useState<LeaveRequest[]>([]);
+  const [teamRequests, setTeamRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [showApply, setShowApply] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [isShiftActive, setIsShiftActive] = useState(!!localStorage.getItem('shift_start'));
 
   const [formData, setFormData] = useState({
     type: 'Annual' as LeaveType,
@@ -18,21 +23,38 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
     reason: ''
   });
 
+  const isManagerOrAdmin = user.role === 'Manager' || user.role === 'Admin' || user.role === 'HR';
+  const isHR = user.role === 'HR' || user.role === 'Admin';
+
   const fetch = async () => {
     setLoading(true);
-    const data = await dbService.getLeaveRequests({ employeeId: user.id });
-    setHistory(data);
-    setLoading(false);
+    try {
+      const personalData = await dbService.getLeaveRequests({ employeeId: user.id });
+      setHistory(personalData);
+
+      if (isManagerOrAdmin) {
+        let filter: any = {};
+        if (user.role === 'Manager') filter = { department: user.department };
+        const teamData = await dbService.getLeaveRequests(filter);
+        setTeamRequests(teamData.filter(r => r.status !== 'HR_Finalized' && r.status !== 'Rejected' && r.employeeId !== user.id));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetch();
+    // Re-check shift status whenever component mounts (tab switch)
+    setIsShiftActive(!!localStorage.getItem('shift_start'));
   }, [user]);
 
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.start || !formData.end) {
-      notify("Incomplete", "Please select duration.", "warning");
+      notify(t('critical'), t('actionRequired'), "warning");
       return;
     }
     setSubmitting(true);
@@ -57,81 +79,199 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
         history: []
       }, user);
       
-      notify("Request Sent", "Awaiting manager authorization.", "success");
+      notify(t('leaveApproved'), t('leaveApprovedMsg'), "success");
       setShowApply(false);
+      setFormData({ type: 'Annual', start: '', end: '', reason: '' });
       fetch();
     } catch (err) {
-      notify("Failed", "Unable to submit request.", "error");
+      notify("Failed", "Error", "error");
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleResume = async (req: LeaveRequest) => {
+    if (!isShiftActive) {
+      notify(t('unauthorizedZone'), t('biometricHandshake'), "error");
+      return;
+    }
+
+    setProcessingId(req.id);
     try {
       await dbService.updateLeaveRequestStatus(req.id, 'Resumed', user, "Mobile resumption confirmed.");
-      notify("Duty Resumed", "Welcome back! Status updated to Active.", "success");
+      notify(t('resumeDuty'), t('leaveApprovedMsg'), "success");
       fetch();
     } catch (err) {
       notify("Error", "Action failed.", "error");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleApprovalAction = async (id: string, nextStatus: LeaveRequest['status']) => {
+    setProcessingId(id);
+    try {
+      await dbService.updateLeaveRequestStatus(id, nextStatus, user);
+      notify(t('success'), t('saveChanges'), "success");
+      fetch();
+    } catch (err) {
+      notify("Error", "Action failed.", "error");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleFinalize = (req: LeaveRequest) => {
+    confirm({
+      title: t('payroll'),
+      message: `${t('executeSettlement')} for ${req.employeeName}?`,
+      onConfirm: async () => {
+        setProcessingId(req.id);
+        try {
+          await dbService.finalizeHRApproval(req.id, user, req.days);
+          notify(t('success'), t('officialRecord'), "success");
+          fetch();
+        } catch (err) {
+          notify("Error", "Finalize failed.", "error");
+        } finally {
+          setProcessingId(null);
+        }
+      }
+    });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Pending': return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'Manager_Approved': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+      case 'HR_Approved': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'Resumed': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'HR_Finalized': return 'bg-slate-100 text-slate-400 border-slate-200';
+      default: return 'bg-slate-100 text-slate-500 border-slate-200';
     }
   };
 
   const activeResumption = history.find(h => h.status === 'HR_Approved');
+  const canPhysicallyResume = activeResumption && isShiftActive;
 
   return (
-    <div className="p-6 space-y-8">
-      {/* Dynamic Actions */}
+    <div className="p-6 space-y-8 pb-32">
+      {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-4">
          <button 
            onClick={() => setShowApply(true)}
-           className="p-8 bg-white border border-slate-200 rounded-[32px] flex flex-col items-center gap-3 active:scale-95 transition-all shadow-sm"
+           className="p-6 bg-white border border-slate-200 rounded-[32px] flex flex-col items-center gap-2 active:scale-95 transition-all shadow-sm"
          >
             <span className="text-3xl">🌴</span>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Apply Leave</span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('applyLeave')}</span>
          </button>
          
-         <button 
-           disabled={!activeResumption}
-           onClick={() => activeResumption && handleResume(activeResumption)}
-           className={`p-8 rounded-[32px] flex flex-col items-center gap-3 active:scale-95 transition-all shadow-sm ${
-             activeResumption ? 'bg-emerald-600 text-white' : 'bg-slate-50 border border-slate-100 opacity-40 grayscale'
-           }`}
-         >
-            <span className="text-3xl">{activeResumption ? '🏠' : '🔒'}</span>
-            <span className={`text-[10px] font-black uppercase tracking-widest ${activeResumption ? 'text-white' : 'text-slate-400'}`}>
-              {activeResumption ? 'Resume Duty' : 'No Active Leave'}
-            </span>
-         </button>
+         <div className="flex flex-col gap-2">
+           <button 
+             disabled={!canPhysicallyResume || processingId === activeResumption?.id}
+             onClick={() => activeResumption && handleResume(activeResumption)}
+             className={`p-6 rounded-[32px] w-full flex flex-col items-center gap-2 active:scale-95 transition-all shadow-sm relative ${
+               canPhysicallyResume ? 'bg-indigo-600 text-white shadow-indigo-200' : 'bg-slate-50 border border-slate-100 opacity-40 grayscale'
+             }`}
+           >
+              <span className="text-3xl">{canPhysicallyResume ? '👋' : (activeResumption && !isShiftActive ? '🔒' : '🏖️')}</span>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${canPhysicallyResume ? 'text-white' : 'text-slate-400'}`}>
+                {activeResumption ? t('resumeDuty') : t('noActiveLeave')}
+              </span>
+           </button>
+           {activeResumption && !isShiftActive && (
+             <p className="text-[8px] font-black text-rose-500 uppercase tracking-widest text-center animate-pulse">
+               {language === 'ar' ? 'يجب تسجيل الحضور أولاً' : 'Clock-In Required to Resume'}
+             </p>
+           )}
+         </div>
       </div>
 
-      {/* Leave Application Modal/Sheet */}
+      {/* Approval Feed (Managers/HR) */}
+      {isManagerOrAdmin && teamRequests.length > 0 && (
+        <div className="space-y-4 animate-in slide-in-from-top duration-500">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex justify-between items-center">
+             <span>{t('adminCenter')} • {t('actionRequired')}</span>
+             <span className="w-5 h-5 bg-rose-500 text-white rounded-full flex items-center justify-center text-[10px]">{teamRequests.length}</span>
+          </h3>
+          <div className="space-y-3">
+            {teamRequests.map(req => (
+              <div key={req.id} className="bg-white p-5 rounded-[32px] border border-slate-200 shadow-sm space-y-4">
+                <div className="flex justify-between items-start">
+                  <div className="flex gap-4">
+                    <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center text-lg">{req.type === 'Annual' ? '🌴' : '🤒'}</div>
+                    <div>
+                      <p className="text-sm font-black text-slate-900">{req.employeeName}</p>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase">{req.startDate} → {req.endDate}</p>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase border ${getStatusColor(req.status)}`}>
+                    {t(req.status.toLowerCase().replace('_', '')) || req.status.replace('_', ' ')}
+                  </span>
+                </div>
+
+                <div className="pt-2">
+                  {req.status === 'Pending' && (user.role === 'Manager' || user.role === 'Admin') && (
+                    <button 
+                      disabled={processingId === req.id}
+                      onClick={() => handleApprovalAction(req.id, 'Manager_Approved')}
+                      className="w-full py-3 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-slate-900/10 active:scale-95"
+                    >
+                      {processingId === req.id ? '...' : t('authorize')}
+                    </button>
+                  )}
+                  {req.status === 'Manager_Approved' && isHR && (
+                    <button 
+                      disabled={processingId === req.id}
+                      onClick={() => handleApprovalAction(req.id, 'HR_Approved')}
+                      className="w-full py-3 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-600/10 active:scale-95"
+                    >
+                      {processingId === req.id ? '...' : t('pamCertified')}
+                    </button>
+                  )}
+                  {req.status === 'Resumed' && isHR && (
+                    <button 
+                      disabled={processingId === req.id}
+                      onClick={() => handleFinalize(req)}
+                      className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-600/10 active:scale-95"
+                    >
+                      {processingId === req.id ? '...' : t('executeSettlement')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Leave Application Modal */}
       {showApply && (
         <div className="fixed inset-0 z-[100] flex items-end">
            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowApply(false)}></div>
            <form onSubmit={handleApply} className="relative bg-white w-full rounded-t-[40px] p-8 space-y-8 animate-in slide-in-from-bottom duration-300">
               <div className="flex justify-between items-center">
-                 <h3 className="text-xl font-black text-slate-900 tracking-tight">New Leave Request</h3>
+                 <h3 className="text-xl font-black text-slate-900 tracking-tight">{t('newLeaveRequest')}</h3>
                  <button type="button" onClick={() => setShowApply(false)} className="text-slate-400 text-2xl">×</button>
               </div>
 
               <div className="space-y-6">
                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase">Type</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('nationality')}</label>
                     <select 
                       className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 font-bold text-sm outline-none"
                       value={formData.type}
                       onChange={e => setFormData({...formData, type: e.target.value as any})}
                     >
-                       <option value="Annual">Annual Leave</option>
-                       <option value="Sick">Sick Leave</option>
-                       <option value="Emergency">Emergency</option>
+                       <option value="Annual">{t('annual')}</option>
+                       <option value="Sick">{t('sick')}</option>
+                       <option value="Emergency">{t('emergency')}</option>
                     </select>
                  </div>
                  
                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black text-slate-400 uppercase">From</label>
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{language === 'ar' ? 'من' : 'From'}</label>
                        <input 
                          type="date" 
                          required 
@@ -141,7 +281,7 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
                        />
                     </div>
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black text-slate-400 uppercase">To</label>
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{language === 'ar' ? 'إلى' : 'To'}</label>
                        <input 
                          type="date" 
                          required 
@@ -153,10 +293,10 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
                  </div>
 
                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase">Notes (Optional)</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{language === 'ar' ? 'السبب' : 'Reason'}</label>
                     <textarea 
                       className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-sm font-medium h-24 outline-none"
-                      placeholder="Add details..."
+                      placeholder="..."
                       value={formData.reason}
                       onChange={e => setFormData({...formData, reason: e.target.value})}
                     />
@@ -168,7 +308,7 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
                 disabled={submitting}
                 className="w-full py-5 bg-emerald-600 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl active:scale-95 transition-all"
               >
-                {submitting ? 'Submitting...' : 'Send Application'}
+                {submitting ? '...' : t('enroll')}
               </button>
            </form>
         </div>
@@ -176,52 +316,47 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
 
       {/* Request History */}
       <div className="space-y-4">
-        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">Application Status</h3>
+        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">{t('applicationStatus')}</h3>
         {loading ? (
-          <div className="p-20 text-center animate-pulse text-slate-300">Syncing Leaves...</div>
+          <div className="p-20 text-center animate-pulse text-slate-300">{t('syncing')}</div>
         ) : history.length > 0 ? (
           history.map(req => (
-            <div key={req.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between">
+            <div key={req.id} className="bg-white p-5 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${
-                  req.status === 'Pending' ? 'bg-amber-50' : 'bg-slate-50'
-                }`}>
+                <div className="w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center text-xl">
                   {req.type === 'Annual' ? '🌴' : '🤒'}
                 </div>
                 <div>
-                   <p className="text-sm font-black text-slate-900">{req.type} Leave</p>
-                   <p className="text-[10px] text-slate-500 font-bold">{req.startDate} to {req.endDate}</p>
+                   <p className="text-sm font-black text-slate-900">{req.type} {t('leaves')}</p>
+                   <p className="text-[10px] text-slate-500 font-bold">{req.startDate} → {req.endDate}</p>
                 </div>
               </div>
-              <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                req.status === 'Paid' ? 'bg-slate-100 text-slate-400' : 
-                req.status === 'Pending' ? 'bg-amber-100 text-amber-700' :
-                'bg-emerald-100 text-emerald-700'
-              }`}>
-                {req.status.replace('_', ' ')}
+              <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${getStatusColor(req.status)}`}>
+                {t(req.status.toLowerCase().replace('_', '')) || req.status.replace('_', ' ')}
               </span>
             </div>
           ))
         ) : (
-          <div className="p-20 text-center text-slate-300 font-medium italic">No active applications.</div>
+          <div className="p-20 text-center text-slate-300 font-medium italic">{t('noRecords')}</div>
         )}
       </div>
 
-      {/* Payslip Quick Access */}
-      <div className="bg-slate-900 p-8 rounded-[40px] text-white">
+      {/* Salary Certificate Shortcut */}
+      <div className="bg-slate-900 p-8 rounded-[40px] text-white relative overflow-hidden">
+         <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none text-4xl">🇰🇼</div>
          <div className="flex justify-between items-start mb-6">
             <div>
-              <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Latest Salary Slip</p>
-              <h4 className="text-lg font-black tracking-tight">March 2024</h4>
+              <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">{t('latestSalarySlip')}</p>
+              <h4 className="text-lg font-black tracking-tight">{new Intl.DateTimeFormat(language === 'ar' ? 'ar-KW' : 'en-KW', { month: 'long', year: 'numeric' }).format(new Date())}</h4>
             </div>
             <button 
-              onClick={() => notify("Coming Soon", "Digital PDF generation is currently being audited.", "info")}
-              className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-xl active:scale-90 transition-all"
+              onClick={() => notify(t('downloadCert'), t('success'), "info")}
+              className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-xl active:scale-90 transition-all border border-white/10"
             >
               📥
             </button>
          </div>
-         <p className="text-[10px] text-slate-400 font-medium">Download official PDF certificate for bank or residency purposes.</p>
+         <p className="text-[10px] text-slate-400 font-medium leading-relaxed">{t('officialRecord')}</p>
       </div>
     </div>
   );
