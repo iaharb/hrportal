@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { dbService } from '../services/dbService.ts';
 import { Employee, User } from '../types.ts';
-import { translations } from '../translations.ts';
+import { useTranslation } from 'react-i18next';
 
 interface EmployeeDirectoryProps {
   user: User;
@@ -10,12 +10,13 @@ interface EmployeeDirectoryProps {
   language: 'en' | 'ar';
 }
 
-const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ user, onAddClick, language }) => {
+const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ user, onAddClick }) => {
+  const { t, i18n } = useTranslation();
+  const language = i18n.language;
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [filter, setFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const t = translations[language];
 
   const fetchEmployees = async () => {
     setLoading(true);
@@ -34,7 +35,7 @@ const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ user, onAddClick,
 
   useEffect(() => {
     fetchEmployees();
-  }, [user.id, user.department]); // Optimized dependency array
+  }, [user.id, user.department]);
 
   const handleStatusChange = async (employeeId: string, newStatus: Employee['status']) => {
     setUpdatingId(employeeId);
@@ -58,13 +59,13 @@ const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ user, onAddClick,
         return Math.ceil(diff / (1000 * 60 * 60 * 24));
       });
       
-    if (dates.length === 0) return { label: t.unknown, color: 'bg-slate-200', pulse: false };
+    if (dates.length === 0) return { label: t('unknown'), color: 'bg-slate-200', pulse: false };
     const minDays = Math.min(...dates);
     
-    if (minDays < 0) return { label: t.expired, color: 'bg-rose-500', pulse: true };
-    if (minDays <= 30) return { label: t.critical, color: 'bg-orange-500', pulse: true };
-    if (minDays <= 90) return { label: t.warning, color: 'bg-amber-400', pulse: false };
-    return { label: t.secure, color: 'bg-emerald-500', pulse: false };
+    if (minDays < 0) return { label: t('expired'), color: 'bg-rose-500', pulse: true };
+    if (minDays <= 30) return { label: t('critical'), color: 'bg-orange-500', pulse: true };
+    if (minDays <= 90) return { label: t('warning'), color: 'bg-amber-400', pulse: false };
+    return { label: t('secure'), color: 'bg-emerald-500', pulse: false };
   };
   
   const filtered = employees.filter(e => {
@@ -81,14 +82,14 @@ const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ user, onAddClick,
     <div className="space-y-10 animate-in slide-in-from-bottom-6 duration-700">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
         <div>
-          <h2 className="text-4xl font-black text-slate-900 tracking-tight">{t.directory}</h2>
+          <h2 className="text-4xl font-black text-slate-900 tracking-tight">{t('directory')}</h2>
           <p className="text-slate-500 text-lg font-medium mt-1">Registry integrity for the 2025 cycle.</p>
         </div>
         
         <div className="flex flex-col sm:flex-row items-stretch gap-4">
           <input 
             type="text" 
-            placeholder={t.searchPlaceholder}
+            placeholder={t('searchPlaceholder')}
             className="w-full min-w-[320px] px-8 py-5 border border-slate-200 rounded-[28px] bg-white focus:ring-4 focus:ring-emerald-500/5 outline-none font-bold text-slate-700"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -98,7 +99,7 @@ const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ user, onAddClick,
               onClick={onAddClick}
               className="bg-slate-900 text-white px-10 py-5 rounded-[28px] font-black text-[12px] uppercase tracking-widest hover:bg-black transition-all active:scale-95 shadow-xl shadow-slate-900/10"
             >
-              + {t.enroll}
+              + {t('enroll')}
             </button>
           )}
         </div>
@@ -108,18 +109,18 @@ const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ user, onAddClick,
         {loading ? (
           <div className="p-40 flex flex-col justify-center items-center gap-6">
             <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em]">{t.syncing}</p>
+            <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em]">{t('syncing')}</p>
           </div>
         ) : filtered.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-left">
+            <table className="w-full text-start">
               <thead>
                 <tr className="bg-slate-50/50 text-[11px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
                   <th className="px-10 py-8 text-center" style={{ width: '100px' }}>#</th>
-                  <th className="px-10 py-8">{t.nameEn} / {t.nameAr}</th>
-                  <th className="px-10 py-8">{t.documentHealth}</th>
-                  <th className="px-10 py-8">{t.roleEn}</th>
-                  <th className="px-10 py-8">{t.registryStatus}</th>
+                  <th className="px-10 py-8 text-start">{t('nameEn')} / {t('nameAr')}</th>
+                  <th className="px-10 py-8 text-start">{t('documentHealth')}</th>
+                  <th className="px-10 py-8 text-start">{t('roleEn')}</th>
+                  <th className="px-10 py-8 text-start">{t('registryStatus')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -158,13 +159,13 @@ const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ user, onAddClick,
                             onChange={(e) => handleStatusChange(emp.id, e.target.value as Employee['status'])}
                             className="text-[10px] font-black uppercase tracking-widest rounded-xl px-5 py-2.5 bg-white border border-slate-200 shadow-sm"
                           >
-                            <option value="Active">{t.active}</option>
-                            <option value="On Leave">{t.onLeave}</option>
-                            <option value="Terminated">{t.terminated}</option>
+                            <option value="Active">{t('active')}</option>
+                            <option value="On Leave">{t('onLeave')}</option>
+                            <option value="Terminated">{t('terminated')}</option>
                           </select>
                         ) : (
                           <span className={`text-[10px] font-black uppercase tracking-widest ${emp.status === 'Active' ? 'text-emerald-600' : 'text-slate-400'}`}>
-                            {t[emp.status.toLowerCase().replace(' ', '') as keyof typeof t] || emp.status}
+                            {t(emp.status.toLowerCase().replace(' ', '')) || emp.status}
                           </span>
                         )}
                       </td>
@@ -176,7 +177,7 @@ const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ user, onAddClick,
           </div>
         ) : (
           <div className="p-40 text-center flex flex-col items-center">
-            <h4 className="text-xl font-black text-slate-300 uppercase tracking-widest">{t.noRecords}</h4>
+            <h4 className="text-xl font-black text-slate-300 uppercase tracking-widest">{t('noRecords')}</h4>
           </div>
         )}
       </div>

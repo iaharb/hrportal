@@ -41,7 +41,7 @@ export const resources = {
       dismiss: "Dismiss",
       noRecords: "No records found.",
       active: "Active",
-      onLeave: "On Leave",
+      onleave: "On Leave",
       terminated: "Terminated",
       syncing: "Syncing...",
       unknown: "Unknown",
@@ -178,9 +178,9 @@ export const resources = {
       maintenance: "الصيانة",
       syncMock: "مزامنة السجل التجريبي",
       dismiss: "إغلاق",
-      noRecords: "لم يتم العور على سجلات.",
+      noRecords: "لم يتم العثور على سجلات.",
       active: "نشط",
-      onLeave: "في إجازة",
+      onleave: "في إجازة",
       terminated: "منتهي الخدمة",
       syncing: "جاري المزامنة...",
       unknown: "غير معروف",
@@ -284,3 +284,5 @@ export const translations = {
   en: resources.en.translation,
   ar: resources.ar.translation,
 };
+
+export default translations;
