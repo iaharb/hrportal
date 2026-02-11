@@ -1,7 +1,6 @@
 
 import React, { useState, useRef } from 'react';
 import { User } from '../types.ts';
-import { GoogleGenAI } from "@google/genai";
 import { useNotifications } from '../components/NotificationSystem.tsx';
 
 const MobileExpenses: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, language }) => {
@@ -17,35 +16,36 @@ const MobileExpenses: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user,
       const reader = new FileReader();
       reader.onloadend = () => {
         setImage(reader.result as string);
-        processWithGemini(reader.result as string);
+        processWithOllama(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const processWithGemini = async (base64: string) => {
+  const processWithOllama = async (base64: string) => {
     setCapturing(true);
     try {
-      // Reverting to process.env.API_KEY to avoid TypeError from undefined import.meta.env
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = "Analyze this receipt. Extract Amount (KWD), Date, and Merchant Name as a clean JSON object.";
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: {
-          parts: [
-            { inlineData: { data: base64.split(',')[1], mimeType: 'image/jpeg' } },
-            { text: prompt }
-          ]
-        },
-        config: { responseMimeType: "application/json" }
+      // Local vision analysis using Ollama's 'llava' model
+      const response = await fetch('http://localhost:11434/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'llava',
+          prompt: "Analyze this receipt. Return ONLY a JSON object with keys: amount (string with KWD), date (string), and merchant (string).",
+          images: [base64.split(',')[1]],
+          stream: false,
+          format: 'json'
+        })
       });
 
-      const result = JSON.parse(response.text || '{}');
+      if (!response.ok) throw new Error("Local AI node error.");
+
+      const raw = await response.json();
+      const result = JSON.parse(raw.response || '{}');
       setData(result);
-      notify("Scan Complete", "Financial data extracted successfully.", "success");
+      notify("Scan Complete", "Local vision node extracted data successfully.", "success");
     } catch (err) {
-      notify("Scan Error", "Unable to analyze receipt or missing API key.", "error");
+      notify("Scan Error", "Ensure 'ollama run llava' is active on host.", "error");
     } finally {
       setCapturing(false);
     }
@@ -59,7 +59,7 @@ const MobileExpenses: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user,
             <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center text-5xl">📷</div>
             <div>
               <h3 className="text-xl font-black text-slate-900 tracking-tight">Submit Claim</h3>
-              <p className="text-xs text-slate-400 max-w-xs mx-auto mt-2">Capture any business receipt. Our AI will automatically extract the data for reimbursement.</p>
+              <p className="text-xs text-slate-400 max-w-xs mx-auto mt-2">Capture any business receipt. Our Local AI will automatically extract the data for reimbursement.</p>
             </div>
           </div>
         ) : (
@@ -68,7 +68,7 @@ const MobileExpenses: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user,
             {capturing && (
               <div className="absolute inset-0 bg-slate-900/60 flex flex-col items-center justify-center text-white gap-4">
                  <div className="w-12 h-12 border-4 border-white/20 border-t-emerald-400 rounded-full animate-spin"></div>
-                 <p className="text-[10px] font-black uppercase tracking-widest">AI Audit in progress...</p>
+                 <p className="text-[10px] font-black uppercase tracking-widest">Local AI Processing...</p>
               </div>
             )}
           </div>
@@ -89,8 +89,8 @@ const MobileExpenses: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user,
       {data && (
         <div className="bg-slate-900 p-8 rounded-[40px] text-white space-y-6 animate-in slide-in-from-bottom-4">
            <div className="flex justify-between items-center border-b border-white/10 pb-4">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Verification Result</h4>
-              <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">AI Confidence: High</span>
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Local Vision Result</h4>
+              <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Node: Llava</span>
            </div>
            <div className="space-y-4">
               <div className="flex justify-between">
