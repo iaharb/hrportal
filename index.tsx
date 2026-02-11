@@ -6,6 +6,7 @@ import { NotificationProvider } from './components/NotificationSystem.tsx';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { resources } from './translations.ts';
+import './index.css';
 
 i18n
   .use(initReactI18next)

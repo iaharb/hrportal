@@ -1,14 +1,15 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Standard initialization using process.env.API_KEY injected by Vite
-// The API key must be obtained exclusively from process.env.API_KEY.
+// Standard initialization using process.env.API_KEY.
+// This handles the TypeError by ensuring we don't access undefined import.meta.env
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const ADMIN_SYSTEM_INSTRUCTION = `You are an expert HR Operations Admin Assistant. Your primary mission is to ensure data integrity, record accuracy, and compliance within the HR portal. Always prioritize GDPR and data privacy. Before suggesting any data modification, verify if an audit trail is required. If data is ambiguous, ask clarifying questions rather than guessing. You communicate professionally and concisely.`;
 
 export const getKuwaitizationInsights = async (employeeData: string) => {
   if (!process.env.API_KEY) {
-    console.warn("Gemini API Key is missing.");
+    console.warn("Gemini API Key is missing in process.env.API_KEY.");
     return {
       summary: "AI Insights unavailable. Please configure API_KEY.",
       recommendations: ["Check environment configuration."],
@@ -51,7 +52,6 @@ export const getKuwaitizationInsights = async (employeeData: string) => {
       }
     });
 
-    // Directly access the .text property from GenerateContentResponse
     const text = response.text || '{}';
     return JSON.parse(text.trim());
   } catch (error) {
@@ -64,9 +64,6 @@ export const getKuwaitizationInsights = async (employeeData: string) => {
   }
 };
 
-/**
- * Handles specialized HR Ops tasks using the expert persona.
- */
 export const runAdminTask = async (taskType: string, payload: any) => {
   if (!process.env.API_KEY) return "AI services are not configured.";
 
@@ -105,7 +102,6 @@ export const runAdminTask = async (taskType: string, payload: any) => {
       },
     });
 
-    // Directly access the .text property from GenerateContentResponse
     return response.text || "No response generated.";
   } catch (error) {
     console.error("Admin Task Error:", error);
