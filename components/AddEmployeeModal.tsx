@@ -17,7 +17,7 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ isOpen, onClose, la
   const { t } = useTranslation();
   const { notify } = useNotifications();
   const [loading, setLoading] = useState(false);
-  const localeT = translations[language];
+  const localeT = translations[language] || translations.en;
 
   const [departments, setDepartments] = useState<string[]>([]);
   const [formData, setFormData] = useState<Omit<Employee, 'id'>>({

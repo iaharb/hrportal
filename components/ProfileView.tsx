@@ -203,7 +203,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user }) => {
           {employeeData?.faceToken ? (
             <img src={employeeData.faceToken} className="w-full h-full object-cover grayscale brightness-110" />
           ) : (
-            user.name.split(' ').map(n => n[0]).join('')
+            (user.name || 'User').split(' ').map(n => n[0]).join('')
           )}
         </div>
         <div className="mb-2 relative z-10 flex-1">
@@ -219,7 +219,9 @@ const ProfileView: React.FC<ProfileViewProps> = ({ user }) => {
         <div className="relative z-10 flex gap-4">
            <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-200">
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 text-center">{t('joinedSince')}</p>
-              <p className="text-lg font-black text-slate-900">{new Date(employeeData?.joinDate || '').getFullYear()}</p>
+              <p className="text-lg font-black text-slate-900">
+                {employeeData?.joinDate ? new Date(employeeData.joinDate).getFullYear() : '---'}
+              </p>
            </div>
         </div>
       </header>

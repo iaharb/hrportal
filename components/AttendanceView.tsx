@@ -11,8 +11,9 @@ interface AttendanceViewProps {
 
 const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
   const { t, i18n } = useTranslation();
-  // Defined language variable to fix 'Cannot find name language' error on line 270
-  const language = i18n.language;
+  // Safe normalization of language to handle 'ar-KW', 'ar', 'en-US', etc.
+  const language = (i18n.language && i18n.language.startsWith('ar')) ? 'ar' : 'en';
+  
   const { notify } = useNotifications();
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
   const [officeLocations, setOfficeLocations] = useState<OfficeLocation[]>([]);

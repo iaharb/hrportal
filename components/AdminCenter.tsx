@@ -80,18 +80,18 @@ const AdminCenter: React.FC = () => {
       onConfirm: async () => {
         setLoading(true);
         try {
-          if (!supabase) throw new Error("Supabase not connected");
+          if (!supabase) throw new Error("Supabase is not configured or connected.");
+          
           const { error } = await supabase.rpc('run_sql', { 
             sql_query: "ALTER TABLE employees ADD COLUMN IF NOT EXISTS face_token TEXT;" 
           });
+          
           if (error) {
-            // Most free Supabase projects don't expose 'run_sql' RPC by default for security.
-            // Provide a clear fallback instruction.
             throw new Error("RPC 'run_sql' not found. Please run SQL manually in Supabase Dashboard.");
           }
           notify("Migration Success", "Registry schema updated with biometric support.", "success");
         } catch (err: any) {
-          notify("Manual Step Required", "Automatic migration blocked. Run 'ALTER TABLE employees ADD COLUMN IF NOT EXISTS face_token TEXT;' in Supabase SQL Editor.", "warning");
+          notify("Manual Step Required", err.message || "Automatic migration blocked.", "warning");
         } finally {
           setLoading(false);
         }

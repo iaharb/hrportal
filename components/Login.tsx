@@ -18,7 +18,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, language }) => {
   const [isSeeding, setIsSeeding] = useState(false);
   const [error, setError] = useState('');
   const [showSystemConsole, setShowSystemConsole] = useState(false);
-  const t = translations[language];
+  const t = translations[language] || translations.en;
 
   const handleSeed = async () => {
     setIsSeeding(true);
@@ -37,7 +37,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, language }) => {
     }
   };
 
-  const determineRole = (position: string): UserRole => {
+  const determineRole = (position?: string): UserRole => {
+    if (!position) return 'Employee';
     const pos = position.toLowerCase();
     if (pos.includes('hr') || pos.includes('personnel')) return 'HR';
     if (pos.includes('director') || pos.includes('ceo')) return 'Admin';

@@ -21,6 +21,8 @@ import { useTranslation } from 'react-i18next';
 
 const App: React.FC = () => {
   const { t, i18n } = useTranslation();
+  
+  // Default to Dashboard. Hash-based or state-based routing is safer for ephemeral previews.
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setView] = useState<View>(View.Dashboard);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -30,7 +32,8 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>(window.innerWidth < 768 ? 'mobile' : 'desktop');
   const notificationRef = useRef<HTMLDivElement>(null);
 
-  const language = i18n.language as 'en' | 'ar';
+  // Normalize language to ensure safe access to translation objects
+  const language = (i18n.language && i18n.language.startsWith('ar')) ? 'ar' : 'en';
 
   const setLanguage = (lang: 'en' | 'ar') => {
     i18n.changeLanguage(lang);
@@ -68,9 +71,7 @@ const App: React.FC = () => {
     if (currentUser) {
       if (currentUser.role === 'Employee') {
         setView(View.Profile);
-      } else {
-        setView(View.Dashboard);
-      }
+      } 
       fetchNotifications();
     }
   }, [currentUser]);

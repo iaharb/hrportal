@@ -115,7 +115,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, language,
         <div className="bg-slate-50 rounded-[32px] p-6 border border-slate-100">
            <div className="flex items-center gap-4 mb-5">
              <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center font-black text-sm shadow-md">
-                {user.name[0]}
+                {user.name && user.name.length > 0 ? user.name[0] : 'U'}
              </div>
              <div className="min-w-0 flex-1">
                <p className="text-[13px] font-bold text-slate-900 truncate tracking-tight">{language === 'ar' ? (user as any).nameArabic || user.name : user.name}</p>

@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { User } from '../types.ts';
 import { GoogleGenAI } from "@google/genai";
@@ -26,6 +25,8 @@ const MobileExpenses: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user,
   const processWithGemini = async (base64: string) => {
     setCapturing(true);
     try {
+      // Create a new GoogleGenAI instance right before making the call
+      // Always use process.env.API_KEY directly for initialization as per guidelines.
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = "Analyze this receipt. Extract Amount (KWD), Date, and Merchant Name as a clean JSON object.";
       
@@ -40,11 +41,12 @@ const MobileExpenses: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user,
         config: { responseMimeType: "application/json" }
       });
 
+      // Directly access .text property from the GenerateContentResponse object
       const result = JSON.parse(response.text || '{}');
       setData(result);
       notify("Scan Complete", "Financial data extracted successfully.", "success");
     } catch (err) {
-      notify("Scan Error", "Unable to analyze receipt.", "error");
+      notify("Scan Error", "Unable to analyze receipt or missing API key.", "error");
     } finally {
       setCapturing(false);
     }

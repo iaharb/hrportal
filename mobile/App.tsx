@@ -47,7 +47,7 @@ const MobileApp: React.FC<MobileAppProps> = ({ user, language, setLanguage, onLo
              🚪
            </button>
            <div className="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-sm border border-slate-800">
-             {user.name[0]}
+             {user.name ? user.name[0] : 'U'}
            </div>
         </div>
       </header>

@@ -6,8 +6,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>HR Portal | Enterprise HR</title>
   
-  <!-- Web App Manifest -->
-  <link rel="manifest" href="manifest.json">
+  <!-- Action: Ensure baseHref is relative -->
+  <base href="./">
+  
+  <!-- Action: Verify Manifest Path is relative -->
+  <link rel="manifest" href="./manifest.json">
   
   <!-- Mobile UI Meta Tags -->
   <meta name="theme-color" content="#10b981">
@@ -25,20 +28,18 @@
     body { 
       font-family: 'Inter', sans-serif; 
       overflow-x: hidden;
-      /* Prevent elastic scrolling in standalone mode */
       overscroll-behavior-y: none;
     }
     
-    /* Global adjustment for Arabic users based on provided Prompt rules */
     [dir="rtl"] {
       font-family: 'Cairo', sans-serif !important;
-      font-size: 112%; /* Bumping base size for Arabic readability */
-      line-height: 1.8 !important; /* Increased line-height for Arabic ascenders/descenders */
+      font-size: 112%;
+      line-height: 1.8 !important;
     }
 
     [dir="rtl"] h1, [dir="rtl"] h2, [dir="rtl"] h3 {
-      font-weight: 800; /* Extra bold for Arabic headers */
-      letter-spacing: 0 !important; /* No letter-spacing in Arabic */
+      font-weight: 800;
+      letter-spacing: 0 !important;
     }
 
     [dir="rtl"] .font-black { font-weight: 900; }
@@ -54,13 +55,17 @@
     ::-webkit-scrollbar-track { background: #f8fafc; }
     ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 12px; }
 
-    /* Hide UI if standalone but keep it clean */
     @media (display-mode: standalone) {
       .standalone-hidden { display: none; }
     }
   </style>
   <script>
+    // Critical: Robustly initialize process.env before any modules execute
     window.process = window.process || { env: {} };
+    window.process.env = window.process.env || {};
+    if (!window.process.env.API_KEY) {
+      window.process.env.API_KEY = "";
+    }
   </script>
 <script type="importmap">
 {
@@ -83,6 +88,6 @@
 </head>
 <body class="bg-slate-50 text-slate-900 transition-colors duration-300">
   <div id="root"></div>
-  <script type="module" src="index.tsx"></script>
+  <script type="module" src="./index.tsx"></script>
 </body>
 </html>

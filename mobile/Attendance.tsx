@@ -18,11 +18,16 @@ const MobileAttendance: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ use
   const [scanStatus, setScanStatus] = useState<'Awaiting' | 'Processing' | 'Success'>('Awaiting');
   const videoRef = useRef<HTMLVideoElement>(null);
   
-  const t = translations[language];
+  const t = translations[language] || translations.en;
 
   const handleStartScan = async () => {
     if (!isValid) {
       notify(t.unauthorizedZone, language === 'ar' ? "يجب أن تكون ضمن نطاق ٢٥٠ متر من المكتب." : "You must be within 250m of the office.", "error");
+      return;
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      notify("Hardware Restricted", "Biometric camera access is not available in this environment.", "error");
       return;
     }
 
@@ -40,7 +45,9 @@ const MobileAttendance: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ use
         setScanStatus('Success');
         setTimeout(async () => {
           // Stop stream
-          stream.getTracks().forEach(track => track.stop());
+          if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+          }
           setIsScanning(false);
           await finishClockAction();
         }, 1000);
