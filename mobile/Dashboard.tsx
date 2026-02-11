@@ -97,7 +97,7 @@ const MobileDashboard: React.FC<{ user: User, language: 'en' | 'ar', onNavigate:
           {t.signOutEss}
         </button>
         <p className="mt-4 text-center text-[8px] text-slate-400 font-black uppercase tracking-widest">
-          {t.version} 4.0.2 {t.mobileBuild} • Qubus HR
+          {t.version} 4.0.2 {t.mobileBuild} • Enterprise HR
         </p>
       </div>
     </div>

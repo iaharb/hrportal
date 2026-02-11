@@ -53,7 +53,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, language,
       <div className="p-8 border-b border-slate-100">
         <h1 className="text-2xl font-black text-slate-900 flex items-center gap-3">
           <span className="p-2 bg-emerald-500 text-white rounded-2xl shadow-lg shadow-emerald-500/20">🇰🇼</span> 
-          Qubus <span className="text-emerald-600">HR</span>
+          Enterprise <span className="text-emerald-600">HR</span>
         </h1>
         <button 
           onClick={checkConnection}

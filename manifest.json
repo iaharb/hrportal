@@ -1,7 +1,7 @@
 
 {
-  "name": "Qubus HR Portal",
-  "short_name": "Qubus HR",
+  "name": "Enterprise HR Portal",
+  "short_name": "Enterprise HR",
   "description": "Enterprise HRMS specialized for Kuwaitization compliance and workforce analytics.",
   "start_url": "/",
   "display": "standalone",

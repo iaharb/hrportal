@@ -4,8 +4,10 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { getKuwaitizationInsights } from '../services/geminiService.ts';
 import { dbService } from '../services/dbService.ts';
 import { InsightReport, LeaveRequest, Employee } from '../types.ts';
+import { useTranslation } from 'react-i18next';
 
 const AiInsights: React.FC = () => {
+  const { t, i18n } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<InsightReport | null>(null);
   const [heatmapData, setHeatmapData] = useState<any[]>([]);
@@ -15,7 +17,6 @@ const AiInsights: React.FC = () => {
     const data = [];
     const today = new Date();
     
-    // Forecast for next 30 days
     for (let i = 0; i < 30; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
@@ -29,24 +30,27 @@ const AiInsights: React.FC = () => {
       }).length;
       
       data.push({
-        date: date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
+        date: date.toLocaleDateString(i18n.language === 'ar' ? 'ar-KW' : 'en-GB', { day: '2-digit', month: 'short' }),
         absences: count,
-        staffingLevel: 100 - (count * 15) // Mock logic: each absence reduces capacity by 15%
+        staffingLevel: 100 - (count * 15)
       });
     }
     setHeatmapData(data);
 
-    // Identify risk peaks
     const maxAbsences = Math.max(...data.map(d => d.absences));
     if (maxAbsences > 3) {
       setRiskAssessment({
-        level: 'High Risk',
-        message: `System predicts a critical staffing dip around the middle of next month. Multiple overlapping leave requests detected.`
+        level: t('critical'),
+        message: i18n.language === 'ar' 
+          ? 'يتوقع النظام نقصاً حاداً في القوى العاملة منتصف الشهر القادم.'
+          : 'System predicts a critical staffing dip around the middle of next month.'
       });
     } else {
       setRiskAssessment({
-        level: 'Optimized',
-        message: 'Workforce availability remains within safe operational parameters for the upcoming cycle.'
+        level: t('optimal'),
+        message: i18n.language === 'ar'
+          ? 'جاهزية القوى العاملة ضمن المعايير التشغيلية الآمنة للدورة القادمة.'
+          : 'Workforce availability remains within safe operational parameters for the upcoming cycle.'
       });
     }
   };
@@ -77,7 +81,6 @@ const AiInsights: React.FC = () => {
   };
 
   useEffect(() => {
-    // Auto-load on mount
     generateReport();
   }, []);
 
@@ -91,15 +94,16 @@ const AiInsights: React.FC = () => {
         <div className="relative z-10">
           <div className="inline-flex items-center gap-3 px-4 py-2 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 mb-8">
             <span className="text-emerald-400">✨</span>
-            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Generative Intelligence Hub</span>
+            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">{t('generativeIntelHub')}</span>
           </div>
           
           <h2 className="text-5xl font-black mb-6 tracking-tighter">
-            Strategic <span className="text-emerald-500">Forecasting</span>
+            {t('strategicForecasting')}
           </h2>
           <p className="text-slate-400 text-lg max-w-2xl mb-12 leading-relaxed font-medium">
-            AI-driven analysis of your corporate registry. We track Kuwaitization quotas, 
-            predict workforce availability, and generate compliance pathways automatically.
+            {i18n.language === 'ar' 
+              ? 'تحليلات مدعومة بالذكاء الاصطناعي لسجلك المؤسسي. نتابع حصص التوطين، ونتنبأ بتوفر الموظفين، وننشئ مسارات الامتثال تلقائياً.'
+              : 'AI-driven analysis of your corporate registry. We track Kuwaitization quotas, predict workforce availability, and generate compliance pathways automatically.'}
           </p>
           
           <button 
@@ -107,22 +111,21 @@ const AiInsights: React.FC = () => {
             disabled={loading}
             className="bg-white text-slate-900 px-10 py-5 rounded-[24px] font-black text-[12px] uppercase tracking-widest hover:bg-emerald-500 hover:text-white transition-all disabled:opacity-50 shadow-2xl shadow-white/5 active:scale-95"
           >
-            {loading ? 'Consulting Gemini...' : 'Re-Run Live Database Audit'}
+            {loading ? 'Consulting Gemini...' : t('runAiAudit')}
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Availability Heatmap */}
         <div className="lg:col-span-8 bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm">
           <div className="flex justify-between items-center mb-10">
             <div>
-              <h3 className="text-xl font-black text-slate-900 tracking-tight">Workforce Availability Forecast</h3>
-              <p className="text-sm text-slate-500 font-medium">30-day predictive leave heatmap</p>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">{t('availabilityForecast')}</h3>
+              <p className="text-sm text-slate-500 font-medium">{t('heatmapDescription')}</p>
             </div>
             {riskAssessment && (
               <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
-                riskAssessment.level === 'High Risk' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                riskAssessment.level === t('critical') ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
               }`}>
                 {riskAssessment.level}
               </div>
@@ -161,36 +164,20 @@ const AiInsights: React.FC = () => {
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          
-          <div className="mt-8 pt-8 border-t border-slate-50 flex items-center gap-6">
-             <div className="flex items-center gap-3">
-                <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Absences</span>
-             </div>
-             <p className="text-xs text-slate-400 font-medium italic leading-relaxed">
-               * Predictions account for fixed National Holidays (National Day, Liberation Day) and historical patterns.
-             </p>
-          </div>
         </div>
 
-        {/* Staffing Risk / Insights Sidebar */}
         <div className="lg:col-span-4 space-y-8">
            <div className="bg-indigo-600 p-10 rounded-[48px] text-white shadow-xl shadow-indigo-600/20">
-              <h4 className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mb-4">Staffing Resilience</h4>
+              <h4 className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mb-4">{t('staffingResilience')}</h4>
               <p className="text-lg font-black leading-tight mb-6">
-                {riskAssessment?.message || "Analyzing historical trends to predict operational bottlenecks."}
+                {riskAssessment?.message || t('syncing')}
               </p>
-              <div className="p-4 bg-white/10 rounded-2xl border border-white/10">
-                 <p className="text-[10px] text-indigo-100 font-medium leading-relaxed">
-                   Recommendation: Limit non-essential training sessions between days 12-18 of the next cycle.
-                 </p>
-              </div>
            </div>
 
            {report && (
              <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm">
                 <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Compliance Audit</h3>
+                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">{t('complianceAudit')}</h3>
                   <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
                     report.complianceStatus === 'Compliant' ? 'bg-emerald-100 text-emerald-700' : 
                     report.complianceStatus === 'Warning' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'

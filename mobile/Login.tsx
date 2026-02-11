@@ -48,7 +48,7 @@ const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, language, setLanguag
         userObj = {
           id: dbEmployee.id,
           name: dbEmployee.name,
-          email: `${normalizedInput.replace(/\s+/g, '')}@qubus.kw`,
+          email: `${normalizedInput.replace(/\s+/g, '')}@enterprise-hr.kw`,
           role: determineRole(dbEmployee.position),
           department: dbEmployee.department
         };
@@ -58,7 +58,7 @@ const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, language, setLanguag
           userObj = {
             id: mock.id,
             name: mock.name,
-            email: `${mock.name.split(' ')[0].toLowerCase()}@qubus.kw`,
+            email: `${mock.name.split(' ')[0].toLowerCase()}@enterprise-hr.kw`,
             role: determineRole(mock.position),
             department: mock.department
           };
@@ -81,7 +81,7 @@ const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, language, setLanguag
     <div className="min-h-screen bg-slate-50 flex flex-col p-8 font-sans" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <header className="flex justify-between items-center mt-8 mb-16">
          <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
-           <span className="p-1.5 bg-emerald-500 text-white rounded-xl text-xs">🇰🇼</span> Qubus
+           <span className="p-1.5 bg-emerald-500 text-white rounded-xl text-xs">🇰🇼</span> Enterprise HR
          </h1>
          <div className="flex items-center gap-4">
             <button onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')} className="text-xs font-black text-slate-400 uppercase tracking-widest">

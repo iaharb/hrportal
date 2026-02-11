@@ -21,8 +21,9 @@ export const getKuwaitizationInsights = async (employeeData: string) => {
   `;
 
   try {
+    // Upgraded to gemini-3-pro-preview for complex compliance analysis
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -85,8 +86,9 @@ export const runAdminTask = async (taskType: string, payload: any) => {
   }
 
   try {
+    // Upgraded to gemini-3-pro-preview for coding and advanced reasoning tasks
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         systemInstruction: ADMIN_SYSTEM_INSTRUCTION,

@@ -29,7 +29,7 @@ export interface Employee {
   pifssNumber?: string;
   passportNumber?: string;
   passportExpiry?: string;
-  iznAmalExpiry?: string; // New field for Work Permit
+  iznAmalExpiry?: string; 
   department: string;
   position: string;
   positionArabic?: string;
@@ -45,6 +45,7 @@ export interface Employee {
   lastResetYear?: number;
   iban?: string;
   bankCode?: string;
+  faceToken?: string; // Base64 reference image for biometric matching
 }
 
 export interface AttendanceRecord {
@@ -64,7 +65,7 @@ export interface OfficeLocation {
   name: string;
   lat: number;
   lng: number;
-  radius: number; // in meters
+  radius: number; 
 }
 
 export interface PublicHoliday {

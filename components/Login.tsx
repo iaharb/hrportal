@@ -69,7 +69,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, language }) => {
 
     // High-priority bypass for demo
     if (normalizedInput === 'faisal') {
-      onLogin({ id: '00000000-0000-0000-0000-000000000000', name: 'Dr. Faisal Al-Sabah', email: 'admin@qubus.kw', role: 'Admin' });
+      onLogin({ id: '00000000-0000-0000-0000-000000000000', name: 'Dr. Faisal Al-Sabah', email: 'admin@enterprise-hr.kw', role: 'Admin' });
       clearTimeout(timeoutId);
       return;
     }
@@ -80,7 +80,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, language }) => {
         onLogin({
           id: dbEmployee.id,
           name: dbEmployee.name,
-          email: `${normalizedInput.replace(/\s+/g, '')}@qubus.kw`,
+          email: `${normalizedInput.replace(/\s+/g, '')}@enterprise-hr.kw`,
           role: determineRole(dbEmployee.position),
           department: dbEmployee.department
         });
@@ -98,7 +98,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, language }) => {
         onLogin({
           id: mock.id,
           name: mock.name,
-          email: `${mock.name.split(' ')[0].toLowerCase()}@qubus.kw`,
+          email: `${mock.name.split(' ')[0].toLowerCase()}@enterprise-hr.kw`,
           role: determineRole(mock.position),
           department: mock.department
         });
