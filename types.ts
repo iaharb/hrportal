@@ -1,5 +1,5 @@
 
-export type UserRole = 'Admin' | 'Manager' | 'Employee' | 'HR';
+export type UserRole = 'Admin' | 'Manager' | 'Employee' | 'HR' | 'Mandoob';
 
 export interface User {
   id: string;
@@ -10,6 +10,25 @@ export interface User {
   avatar?: string;
 }
 
+export interface Announcement {
+  id: string;
+  title: string;
+  titleArabic?: string;
+  content: string;
+  contentArabic?: string;
+  priority: 'Normal' | 'Urgent';
+  createdAt: string;
+}
+
+export interface Allowance {
+  id: string;
+  name: string;
+  nameArabic: string;
+  type: 'Fixed' | 'Percentage';
+  value: number;
+  isHousing: boolean;
+}
+
 export interface LeaveBalances {
   annual: number;
   sick: number;
@@ -17,6 +36,9 @@ export interface LeaveBalances {
   annualUsed: number;
   sickUsed: number;
   emergencyUsed: number;
+  shortPermissionLimit: number; 
+  shortPermissionUsed: number;
+  hajUsed: boolean; 
 }
 
 export interface Employee {
@@ -31,10 +53,12 @@ export interface Employee {
   passportExpiry?: string;
   iznAmalExpiry?: string; 
   department: string;
+  departmentArabic?: string;
   position: string;
   positionArabic?: string;
   joinDate: string;
-  salary: number;
+  salary: number; 
+  allowances: Allowance[];
   status: 'Active' | 'On Leave' | 'Terminated';
   managerId?: string;
   managerName?: string;
@@ -45,7 +69,8 @@ export interface Employee {
   lastResetYear?: number;
   iban?: string;
   bankCode?: string;
-  faceToken?: string; // Base64 reference image for biometric matching
+  faceToken?: string; 
+  deviceUserId?: string; 
 }
 
 export interface AttendanceRecord {
@@ -56,13 +81,25 @@ export interface AttendanceRecord {
   clockIn: string;
   clockOut?: string;
   location: string;
+  locationArabic?: string;
   status: 'On-Site' | 'Off-Site' | 'Late';
-  coordinates: { lat: number; lng: number };
+  coordinates?: { lat: number; lng: number };
+  source: 'Web' | 'Mobile' | 'Hardware';
+  deviceId?: string;
+}
+
+export interface HardwareConfig {
+  serverIp: string;
+  apiKey: string;
+  syncInterval: number; 
+  lastSync?: string;
+  status: 'Connected' | 'Error' | 'Disconnected';
 }
 
 export interface OfficeLocation {
   id: string;
   name: string;
+  nameArabic: string;
   lat: number;
   lng: number;
   radius: number; 
@@ -71,6 +108,7 @@ export interface OfficeLocation {
 export interface PublicHoliday {
   id: string;
   name: string;
+  nameArabic: string;
   date: string;
   type: 'National' | 'Religious' | 'Other';
   isFixed: boolean;
@@ -80,6 +118,8 @@ export interface SettlementResult {
   tenureYears: number;
   tenureMonths: number;
   tenureDays: number;
+  totalServiceDays: number;
+  remuneration: number;
   indemnityAmount: number;
   leavePayout: number;
   totalSettlement: number;
@@ -90,6 +130,8 @@ export interface SettlementResult {
     firstFiveYearAmount: number;
     subsequentYearAmount: number;
     leaveDaysEncashed: number;
+    isCapped: boolean;
+    unpaidDaysDeducted: number;
   };
 }
 
@@ -101,7 +143,8 @@ export type LeaveType =
   | 'Hajj' 
   | 'Marriage' 
   | 'Compassionate' 
-  | 'Paternity';
+  | 'Paternity'
+  | 'ShortPermission';
 
 export interface LeaveHistoryEntry {
   user: string;
@@ -120,6 +163,7 @@ export interface LeaveRequest {
   startDate: string;
   endDate: string;
   days: number;
+  durationHours?: number; 
   reason: string;
   status: 'Pending' | 'Manager_Approved' | 'HR_Approved' | 'Resumed' | 'Rejected' | 'HR_Finalized' | 'Paid';
   managerId: string;
@@ -131,42 +175,39 @@ export interface LeaveRequest {
 
 export interface PayrollRun {
   id: string;
-  period_key: string;
-  cycle_type: 'Monthly' | 'Bi-Weekly';
+  period_key?: string;
+  periodKey: string;
+  cycle_type?: 'Monthly' | 'Bi-Weekly';
+  cycleType: 'Monthly' | 'Bi-Weekly';
   status: 'Draft' | 'Finalized';
-  total_disbursement: number;
-  created_at: string;
+  totalDisbursement: number;
+  total_disbursement?: number;
+  createdAt: string;
 }
 
 export interface PayrollItem {
   id: string;
-  run_id: string;
-  employee_id: string;
-  employee_name?: string;
-  basic_salary: number;
-  allowances: number;
-  deductions: number;
-  pifss_deduction: number;
-  net_salary: number;
-  verified_by_hr: boolean;
+  runId: string;
+  employeeId: string;
+  employeeName: string;
+  basicSalary: number;
+  housingAllowance: number;
+  otherAllowances: number;
+  leaveDeductions: number; 
+  shortPermissionDeductions: number;
+  pifssDeduction: number; 
+  pifssEmployerShare: number; 
+  netSalary: number;
+  verifiedByHr: boolean;
   variance?: number;
-}
-
-export interface PayrollEntry {
-  id?: string;
-  employee_id: string;
-  leave_id: string;
-  deduction_amount: number;
-  month_year: string;
-  created_at?: string;
 }
 
 export interface Notification {
   id: string;
   title: string;
   message: string;
-  type: 'urgent' | 'reminder' | 'success';
-  category: 'leave_start' | 'leave_return' | 'pending_approval' | 'payroll_alert' | 'document_expiry';
+  type: 'urgent' | 'reminder' | 'success' | 'info';
+  category: 'leave_start' | 'leave_return' | 'pending_approval' | 'payroll_alert' | 'document_expiry' | 'permission_resume';
   timestamp: string;
   isRead: boolean;
   linkId?: string;
@@ -174,6 +215,7 @@ export interface Notification {
 
 export interface DepartmentMetric {
   name: string;
+  nameArabic: string;
   kuwaitiCount: number;
   expatCount: number;
   targetRatio: number;
@@ -182,7 +224,7 @@ export interface DepartmentMetric {
 export interface InsightReport {
   summary: string;
   recommendations: string[];
-  complianceStatus: 'Compliant' | 'Warning' | 'Non-Compliant';
+  complianceStatus: string;
 }
 
 export enum View {
@@ -195,7 +237,9 @@ export enum View {
   Payroll = 'payroll',
   Settlement = 'settlement',
   Attendance = 'attendance',
-  AdminCenter = 'admin-center'
+  AdminCenter = 'admin-center',
+  Whitepaper = 'whitepaper',
+  Mandoob = 'mandoob'
 }
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';

@@ -1,37 +1,10 @@
 
-/**
- * Local AI Integration:
- * Replaces Google Gemini with a local Ollama instance.
- * Endpoint: http://localhost:11434/api/generate
- */
+import { GoogleGenAI, Type } from "@google/genai";
 
-const OLLAMA_ENDPOINT = 'http://localhost:11434/api/generate';
-const TEXT_MODEL = 'llama3';
+// Initialize using the mandated environment variable pattern
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const ADMIN_SYSTEM_INSTRUCTION = `You are an expert HR Operations Admin Assistant. Your primary mission is to ensure data integrity, record accuracy, and compliance within the HR portal. Always prioritize GDPR and data privacy. Before suggesting any data modification, verify if an audit trail is required. If data is ambiguous, ask clarifying questions rather than guessing. You communicate professionally and concisely.`;
-
-async function callOllama(prompt: string, options: { system?: string; json?: boolean } = {}) {
-  try {
-    const response = await fetch(OLLAMA_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: TEXT_MODEL,
-        prompt: options.system ? `${options.system}\n\n${prompt}` : prompt,
-        stream: false,
-        format: options.json ? 'json' : undefined
-      })
-    });
-
-    if (!response.ok) throw new Error(`Ollama Error: ${response.statusText}`);
-    
-    const data = await response.json();
-    return data.response;
-  } catch (error) {
-    console.error("Local AI Sync Error:", error);
-    return null;
-  }
-}
 
 export const getKuwaitizationInsights = async (employeeData: string) => {
   const prompt = `
@@ -41,34 +14,50 @@ export const getKuwaitizationInsights = async (employeeData: string) => {
     Data:
     ${employeeData}
     
-    Return a JSON object with:
-    1. "summary": A string summary of current standing.
-    2. "recommendations": An array of improvement strings.
-    3. "complianceStatus": "Compliant", "Warning", or "Non-Compliant".
+    Provide a JSON response with:
+    1. A summary of current standing.
+    2. Recommendations for improvement (training, hiring, retention).
+    3. Compliance risk assessment.
   `;
 
-  const result = await callOllama(prompt, { json: true });
-  
-  if (!result) {
-    return {
-      summary: "Local AI (Ollama) is currently unreachable. Ensure 'ollama run llama3' is configured.",
-      recommendations: ["Start local Ollama server."],
-      complianceStatus: "Warning"
-    };
-  }
-
   try {
-    return JSON.parse(result);
-  } catch (e) {
-    console.error("JSON Parse Error from Ollama:", e);
+    // Upgraded to gemini-3-pro-preview for complex compliance analysis
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            summary: { type: Type.STRING },
+            recommendations: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            complianceStatus: { type: Type.STRING, description: 'Must be Compliant, Warning, or Non-Compliant' }
+          },
+          required: ["summary", "recommendations", "complianceStatus"],
+          propertyOrdering: ["summary", "recommendations", "complianceStatus"]
+        }
+      }
+    });
+
+    const text = response.text || '{}';
+    return JSON.parse(text.trim());
+  } catch (error) {
+    console.error("Gemini Insight Error:", error);
     return {
-      summary: "Registry intelligence encountered a parsing error.",
-      recommendations: ["Check model output formatting."],
+      summary: "Registry intelligence is currently processing or offline. Please verify API_KEY in deployment settings.",
+      recommendations: ["Check Vercel project environment variables for API_KEY."],
       complianceStatus: "Warning"
     };
   }
 };
 
+/**
+ * Handles specialized HR Ops tasks using the expert persona.
+ */
 export const runAdminTask = async (taskType: string, payload: any) => {
   let prompt = "";
   
@@ -81,15 +70,34 @@ export const runAdminTask = async (taskType: string, payload: any) => {
       break;
     case 'BULK_VALIDATION':
       prompt = `Review these employee records: ${JSON.stringify(payload.records)}. 
-      Identify any logical inconsistencies.`;
+      Identify any logical inconsistencies, such as termination dates occurring before hire dates, salary figures outside expected ranges, or overlapping leave periods.`;
       break;
     case 'SLACK_DRAFT':
-      prompt = `Draft a short, professional Slack message to notify the ${payload.team} team that their ${payload.subject} have been updated.`;
+      prompt = `Draft a short, professional Slack message to notify the ${payload.team} team that their ${payload.subject} have been updated. Include a placeholder for the FAQ link.`;
+      break;
+    case 'SQL_SCHEMA':
+      prompt = `Write a SQL schema for an HR audit table that tracks: changed_field, old_value, new_value, updated_by, and timestamp.`;
+      break;
+    case 'VALIDATION_LOGIC':
+      prompt = `Write a Python function to validate HR data imports. It should flag records with missing Mandatory Fields (Name, Civil ID, Nationality) and ensure Date Formats are consistent (YYYY-MM-DD).`;
       break;
     default:
       prompt = `Assist with this HR Operations request: ${payload.customPrompt}`;
   }
 
-  const result = await callOllama(prompt, { system: ADMIN_SYSTEM_INSTRUCTION });
-  return result || "Local AI services are currently processing or offline.";
+  try {
+    // Upgraded to gemini-3-pro-preview for coding and advanced reasoning tasks
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: prompt,
+      config: {
+        systemInstruction: ADMIN_SYSTEM_INSTRUCTION,
+      },
+    });
+
+    return response.text || "No response generated.";
+  } catch (error) {
+    console.error("Admin Task Error:", error);
+    return "The system assistant encountered an error while processing the compliance audit.";
+  }
 };

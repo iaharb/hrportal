@@ -17,10 +17,9 @@ const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, language, setLanguag
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const t = translations[language] || translations.en;
+  const t = translations[language];
 
-  const determineRole = (position?: string): UserRole => {
-    if (!position) return 'Employee';
+  const determineRole = (position: string): UserRole => {
     const pos = position.toLowerCase();
     if (pos.includes('hr') || pos.includes('personnel')) return 'HR';
     if (pos.includes('director') || pos.includes('ceo')) return 'Admin';

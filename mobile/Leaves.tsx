@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, LeaveRequest, LeaveType, Employee } from '../types.ts';
 import { dbService } from '../services/dbService.ts';
@@ -15,12 +14,14 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
   const [submitting, setSubmitting] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [isShiftActive, setIsShiftActive] = useState(!!localStorage.getItem('shift_start'));
+  const [isHourBased, setIsHourBased] = useState(false);
 
   const [formData, setFormData] = useState({
     type: 'Annual' as LeaveType,
     start: '',
     end: '',
-    reason: ''
+    reason: '',
+    hours: 1
   });
 
   const isManagerOrAdmin = user.role === 'Manager' || user.role === 'Admin' || user.role === 'HR';
@@ -47,31 +48,54 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
 
   useEffect(() => {
     fetch();
-    // Re-check shift status whenever component mounts (tab switch)
     setIsShiftActive(!!localStorage.getItem('shift_start'));
   }, [user]);
 
+  const tomorrowStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  }, []);
+
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.start || !formData.end) {
+    if (!isHourBased && (!formData.start || !formData.end)) {
       notify(t('critical'), t('actionRequired'), "warning");
       return;
     }
+    if (isHourBased && !formData.start) {
+      notify(t('critical'), t('actionRequired'), "warning");
+      return;
+    }
+
+    if (isHourBased) {
+       const selectedDate = new Date(formData.start);
+       const minLeadDate = new Date();
+       minLeadDate.setHours(0, 0, 0, 0);
+       minLeadDate.setDate(minLeadDate.getDate() + 1);
+
+       if (selectedDate < minLeadDate) {
+         notify(t('critical'), language === 'ar' ? "يجب طلب إذن الخروج قبل يوم واحد على الأقل." : "Short Permission must be requested at least one day in advance.", "error");
+         return;
+       }
+    }
+
     setSubmitting(true);
     try {
-      const startD = new Date(formData.start);
-      const endD = new Date(formData.end);
+      const startD = new Date(formData.start || new Date());
+      const endD = new Date(formData.end || new Date());
       const diffTime = Math.abs(endD.getTime() - startD.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      const diffDays = isHourBased ? 0 : Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
       await dbService.createLeaveRequest({
         employeeId: user.id,
         employeeName: user.name,
         department: user.department || 'General',
-        type: formData.type,
+        type: isHourBased ? 'ShortPermission' : formData.type,
         startDate: formData.start,
-        endDate: formData.end,
+        endDate: isHourBased ? formData.start : formData.end,
         days: diffDays,
+        durationHours: isHourBased ? formData.hours : undefined,
         reason: formData.reason,
         status: 'Pending',
         managerId: '00000000-0000-0000-0000-000000000000',
@@ -81,7 +105,7 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
       
       notify(t('leaveApproved'), t('leaveApprovedMsg'), "success");
       setShowApply(false);
-      setFormData({ type: 'Annual', start: '', end: '', reason: '' });
+      setFormData({ type: 'Annual', start: '', end: '', reason: '', hours: 1 });
       fetch();
     } catch (err) {
       notify("Failed", "Error", "error");
@@ -91,15 +115,10 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
   };
 
   const handleResume = async (req: LeaveRequest) => {
-    if (!isShiftActive) {
-      notify(t('unauthorizedZone'), t('biometricHandshake'), "error");
-      return;
-    }
-
     setProcessingId(req.id);
     try {
       await dbService.updateLeaveRequestStatus(req.id, 'Resumed', user, "Mobile resumption confirmed.");
-      notify(t('resumeDuty'), t('leaveApprovedMsg'), "success");
+      notify(t('resumeDuty'), t('hrInformed'), "success");
       fetch();
     } catch (err) {
       notify("Error", "Action failed.", "error");
@@ -151,41 +170,44 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
     }
   };
 
-  const activeResumption = history.find(h => h.status === 'HR_Approved');
-  const canPhysicallyResume = activeResumption && isShiftActive;
+  const activeResumption = history.find(h => h.status === 'HR_Approved' || (h.type === 'ShortPermission' && h.status === 'Manager_Approved'));
 
   return (
     <div className="p-6 space-y-8 pb-32">
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-4">
          <button 
-           onClick={() => setShowApply(true)}
+           onClick={() => { setIsHourBased(false); setShowApply(true); }}
            className="p-6 bg-white border border-slate-200 rounded-[32px] flex flex-col items-center gap-2 active:scale-95 transition-all shadow-sm"
          >
             <span className="text-3xl">🌴</span>
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('applyLeave')}</span>
          </button>
          
-         <div className="flex flex-col gap-2">
-           <button 
-             disabled={!canPhysicallyResume || processingId === activeResumption?.id}
-             onClick={() => activeResumption && handleResume(activeResumption)}
-             className={`p-6 rounded-[32px] w-full flex flex-col items-center gap-2 active:scale-95 transition-all shadow-sm relative ${
-               canPhysicallyResume ? 'bg-indigo-600 text-white shadow-indigo-200' : 'bg-slate-50 border border-slate-100 opacity-40 grayscale'
-             }`}
-           >
-              <span className="text-3xl">{canPhysicallyResume ? '👋' : (activeResumption && !isShiftActive ? '🔒' : '🏖️')}</span>
-              <span className={`text-[10px] font-black uppercase tracking-widest ${canPhysicallyResume ? 'text-white' : 'text-slate-400'}`}>
-                {activeResumption ? t('resumeDuty') : t('noActiveLeave')}
-              </span>
-           </button>
-           {activeResumption && !isShiftActive && (
-             <p className="text-[8px] font-black text-rose-500 uppercase tracking-widest text-center animate-pulse">
-               {language === 'ar' ? 'يجب تسجيل الحضور أولاً' : 'Clock-In Required to Resume'}
-             </p>
-           )}
-         </div>
+         <button 
+           onClick={() => { setIsHourBased(true); setShowApply(true); }}
+           className="p-6 bg-indigo-50 border border-indigo-100 rounded-[32px] flex flex-col items-center gap-2 active:scale-95 transition-all shadow-sm"
+         >
+            <span className="text-3xl">🚶</span>
+            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{t('shortPermission')}</span>
+         </button>
       </div>
+
+      {activeResumption && (
+        <div className="bg-indigo-600 p-6 rounded-[32px] text-white space-y-4 shadow-xl shadow-indigo-200">
+           <div>
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-70">{t('resumeDuty')}</p>
+              <h4 className="text-lg font-black">{activeResumption.type === 'ShortPermission' ? t('shortPermission') : activeResumption.type}</h4>
+           </div>
+           <button 
+             disabled={processingId === activeResumption.id}
+             onClick={() => handleResume(activeResumption)}
+             className="w-full py-4 bg-white text-indigo-600 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
+           >
+             {t('confirmResumption')}
+           </button>
+        </div>
+      )}
 
       {/* Approval Feed (Managers/HR) */}
       {isManagerOrAdmin && teamRequests.length > 0 && (
@@ -199,10 +221,12 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
               <div key={req.id} className="bg-white p-5 rounded-[32px] border border-slate-200 shadow-sm space-y-4">
                 <div className="flex justify-between items-start">
                   <div className="flex gap-4">
-                    <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center text-lg">{req.type === 'Annual' ? '🌴' : '🤒'}</div>
+                    <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center text-lg">{req.type === 'Annual' ? '🌴' : (req.type === 'ShortPermission' ? '🚶' : '🤒')}</div>
                     <div>
                       <p className="text-sm font-black text-slate-900">{req.employeeName}</p>
-                      <p className="text-[9px] text-slate-400 font-bold uppercase">{req.startDate} → {req.endDate}</p>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase">
+                        {req.type === 'ShortPermission' ? `${req.durationHours}h Permission` : `${req.startDate} → ${req.endDate}`}
+                      </p>
                     </div>
                   </div>
                   <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase border ${getStatusColor(req.status)}`}>
@@ -220,7 +244,7 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
                       {processingId === req.id ? '...' : t('authorize')}
                     </button>
                   )}
-                  {req.status === 'Manager_Approved' && isHR && (
+                  {req.status === 'Manager_Approved' && isHR && req.type !== 'ShortPermission' && (
                     <button 
                       disabled={processingId === req.id}
                       onClick={() => handleApprovalAction(req.id, 'HR_Approved')}
@@ -249,65 +273,60 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
       {showApply && (
         <div className="fixed inset-0 z-[100] flex items-end">
            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowApply(false)}></div>
-           <form onSubmit={handleApply} className="relative bg-white w-full rounded-t-[40px] p-8 space-y-8 animate-in slide-in-from-bottom duration-300">
+           <form onSubmit={handleApply} className="relative bg-white w-full rounded-t-[40px] p-8 space-y-8 animate-in slide-in-from-bottom duration-300 max-h-[85vh] overflow-y-auto">
               <div className="flex justify-between items-center">
-                 <h3 className="text-xl font-black text-slate-900 tracking-tight">{t('newLeaveRequest')}</h3>
+                 <h3 className="text-xl font-black text-slate-900 tracking-tight">{isHourBased ? t('shortPermission') : t('newLeaveRequest')}</h3>
                  <button type="button" onClick={() => setShowApply(false)} className="text-slate-400 text-2xl">×</button>
               </div>
 
               <div className="space-y-6">
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('nationality')}</label>
-                    <select 
-                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 font-bold text-sm outline-none"
-                      value={formData.type}
-                      onChange={e => setFormData({...formData, type: e.target.value as any})}
-                    >
-                       <option value="Annual">{t('annual')}</option>
-                       <option value="Sick">{t('sick')}</option>
-                       <option value="Emergency">{t('emergency')}</option>
-                    </select>
-                 </div>
-                 
-                 <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{language === 'ar' ? 'من' : 'From'}</label>
-                       <input 
-                         type="date" 
-                         required 
-                         className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 font-bold text-xs"
-                         value={formData.start}
-                         onChange={e => setFormData({...formData, start: e.target.value})}
-                       />
-                    </div>
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{language === 'ar' ? 'إلى' : 'To'}</label>
-                       <input 
-                         type="date" 
-                         required 
-                         className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 font-bold text-xs"
-                         value={formData.end}
-                         onChange={e => setFormData({...formData, end: e.target.value})}
-                       />
-                    </div>
-                 </div>
+                 {!isHourBased ? (
+                   <>
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('leaveType')}</label>
+                        <select 
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 font-bold text-sm outline-none"
+                          value={formData.type}
+                          onChange={e => setFormData({...formData, type: e.target.value as any})}
+                        >
+                           <option value="Annual">{t('annual')}</option>
+                           <option value="Sick">{t('sick')}</option>
+                           <option value="Emergency">{t('emergency')}</option>
+                        </select>
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{language === 'ar' ? 'من' : 'From'}</label>
+                           <input type="date" required className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 font-bold text-xs" value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} />
+                        </div>
+                        <div className="space-y-2">
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{language === 'ar' ? 'إلى' : 'To'}</label>
+                           <input type="date" required className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 font-bold text-xs" value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} />
+                        </div>
+                     </div>
+                   </>
+                 ) : (
+                   <div className="space-y-4">
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{language === 'ar' ? 'تاريخ الإذن' : 'Permission Date'}</label>
+                         <input type="date" required min={tomorrowStr} className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 font-bold text-xs" value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} />
+                      </div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('hoursLabel')}</label>
+                      <div className="grid grid-cols-2 gap-4">
+                         <button type="button" onClick={() => setFormData({...formData, hours: 1})} className={`py-4 rounded-2xl border font-black text-xl transition-all ${formData.hours === 1 ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>1h</button>
+                         <button type="button" onClick={() => setFormData({...formData, hours: 2})} className={`py-4 rounded-2xl border font-black text-xl transition-all ${formData.hours === 2 ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>2h</button>
+                      </div>
+                      <p className="text-[10px] text-amber-600 font-bold text-center">One day lead time & Max 2h/week.</p>
+                   </div>
+                 )}
 
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{language === 'ar' ? 'السبب' : 'Reason'}</label>
-                    <textarea 
-                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-sm font-medium h-24 outline-none"
-                      placeholder="..."
-                      value={formData.reason}
-                      onChange={e => setFormData({...formData, reason: e.target.value})}
-                    />
+                    <textarea className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-sm font-medium h-24 outline-none" placeholder="..." value={formData.reason} onChange={e => setFormData({...formData, reason: e.target.value})} />
                  </div>
               </div>
 
-              <button 
-                type="submit"
-                disabled={submitting}
-                className="w-full py-5 bg-emerald-600 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl active:scale-95 transition-all"
-              >
+              <button type="submit" disabled={submitting} className="w-full py-5 bg-emerald-600 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl active:scale-95 transition-all">
                 {submitting ? '...' : t('enroll')}
               </button>
            </form>
@@ -324,11 +343,13 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
             <div key={req.id} className="bg-white p-5 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center text-xl">
-                  {req.type === 'Annual' ? '🌴' : '🤒'}
+                  {req.type === 'Annual' ? '🌴' : (req.type === 'ShortPermission' ? '🚶' : '🤒')}
                 </div>
                 <div>
-                   <p className="text-sm font-black text-slate-900">{req.type} {t('leaves')}</p>
-                   <p className="text-[10px] text-slate-500 font-bold">{req.startDate} → {req.endDate}</p>
+                   <p className="text-sm font-black text-slate-900">{req.type === 'ShortPermission' ? t('shortPermission') : req.type}</p>
+                   <p className="text-[10px] text-slate-500 font-bold">
+                     {req.type === 'ShortPermission' ? `${req.startDate} (${req.durationHours}h)` : `${req.startDate} → ${req.endDate}`}
+                   </p>
                 </div>
               </div>
               <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${getStatusColor(req.status)}`}>
@@ -339,24 +360,6 @@ const MobileLeaves: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ user, l
         ) : (
           <div className="p-20 text-center text-slate-300 font-medium italic">{t('noRecords')}</div>
         )}
-      </div>
-
-      {/* Salary Certificate Shortcut */}
-      <div className="bg-slate-900 p-8 rounded-[40px] text-white relative overflow-hidden">
-         <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none text-4xl">🇰🇼</div>
-         <div className="flex justify-between items-start mb-6">
-            <div>
-              <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">{t('latestSalarySlip')}</p>
-              <h4 className="text-lg font-black tracking-tight">{new Intl.DateTimeFormat(language === 'ar' ? 'ar-KW' : 'en-KW', { month: 'long', year: 'numeric' }).format(new Date())}</h4>
-            </div>
-            <button 
-              onClick={() => notify(t('downloadCert'), t('success'), "info")}
-              className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-xl active:scale-90 transition-all border border-white/10"
-            >
-              📥
-            </button>
-         </div>
-         <p className="text-[10px] text-slate-400 font-medium leading-relaxed">{t('officialRecord')}</p>
       </div>
     </div>
   );

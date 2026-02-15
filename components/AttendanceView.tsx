@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { dbService } from '../services/dbService.ts';
 import { User, AttendanceRecord, OfficeLocation, Employee } from '../types.ts';
@@ -11,9 +10,7 @@ interface AttendanceViewProps {
 
 const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
   const { t, i18n } = useTranslation();
-  // Safe normalization of language to handle 'ar-KW', 'ar', 'en-US', etc.
-  const language = (i18n.language && i18n.language.startsWith('ar')) ? 'ar' : 'en';
-  
+  const language = i18n.language;
   const { notify } = useNotifications();
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
   const [officeLocations, setOfficeLocations] = useState<OfficeLocation[]>([]);
@@ -22,6 +19,7 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
   const [activeRecord, setActiveRecord] = useState<AttendanceRecord | null>(null);
   const [activeZone, setActiveZone] = useState<OfficeLocation | null>(null);
   const [employeeProfile, setEmployeeProfile] = useState<Employee | null>(null);
+  const [showGuide, setShowGuide] = useState(!localStorage.getItem('guide_attendance_seen'));
   
   // Biometric State
   const [isScanning, setIsScanning] = useState(false);
@@ -49,6 +47,11 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
     const today = new Date().toISOString().split('T')[0];
     const todaysRecord = historyData.find(r => r.date === today);
     if (todaysRecord) setActiveRecord(todaysRecord);
+  };
+
+  const dismissGuide = () => {
+    setShowGuide(false);
+    localStorage.setItem('guide_attendance_seen', 'true');
   };
 
   const startFaceScan = async () => {
@@ -80,7 +83,7 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
           if (activeStream) activeStream.getTracks().forEach(track => track.stop());
           notify(t('verified'), t('officialRecord'), "success");
         }
-      }, 100);
+      }, 1000);
 
     } catch (err) {
       notify(t('critical'), t('biometricHandshake'), "error");
@@ -143,7 +146,8 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
       clockIn: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
       location: activeZone.name,
       status: 'On-Site',
-      coordinates: { lat: currentLocation.latitude, lng: currentLocation.longitude }
+      coordinates: { lat: currentLocation.latitude, lng: currentLocation.longitude },
+      source: 'Web'
     };
 
     try {
@@ -181,6 +185,23 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
 
   return (
     <div className="space-y-10 animate-in fade-in duration-500 pb-20 max-w-6xl mx-auto">
+      {showGuide && (
+        <div className="bg-indigo-600 p-8 rounded-[40px] text-white shadow-xl shadow-indigo-500/10 flex flex-col md:flex-row items-center gap-8 border border-indigo-500/20 animate-in slide-in-from-top-4 duration-500 relative overflow-hidden">
+           <div className="absolute top-0 right-0 p-12 opacity-10 pointer-events-none">✨</div>
+           <div className="w-16 h-16 bg-white/20 rounded-3xl flex items-center justify-center text-3xl shrink-0">📡</div>
+           <div className="flex-1 space-y-2 text-start">
+              <h3 className="text-xl font-black tracking-tight">{t('guideAttendanceTitle')}</h3>
+              <p className="text-indigo-50 font-medium leading-relaxed opacity-90">{t('guideAttendanceDesc')}</p>
+           </div>
+           <button 
+             onClick={dismissGuide}
+             className="px-8 py-3 bg-white text-indigo-700 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-50 transition-all active:scale-95 shadow-lg"
+           >
+             {t('gotIt')}
+           </button>
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row gap-10">
         <div className="lg:w-[450px] space-y-8">
           <div className="bg-white p-10 rounded-[48px] border border-slate-200 shadow-xl shadow-slate-900/5 relative overflow-hidden">
@@ -195,7 +216,7 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
                 <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-3xl shadow-inner ${activeZone ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-300'}`}>
                   {detecting ? '⏳' : (activeZone ? '✅' : '🏢')}
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 text-start">
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('gpsPerimeter')}</p>
                    <p className={`text-xl font-black ${activeZone ? 'text-slate-900' : 'text-slate-300'}`}>
                      {detecting ? t('syncing') : (activeZone ? activeZone.name : t('unauthorizedZone'))}
@@ -207,7 +228,7 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
                 <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-3xl shadow-inner ${isFaceVerified ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-300'}`}>
                   {isScanning ? '📷' : (isFaceVerified ? '🧬' : '👤')}
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 text-start">
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('facialId')}</p>
                    <p className={`text-xl font-black ${isFaceVerified ? 'text-indigo-900' : 'text-slate-300'}`}>
                      {isScanning ? `${t('verifying')} ${scanProgress}%` : (isFaceVerified ? t('verified') : t('awaitingScan'))}
@@ -268,7 +289,7 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
 
         <div className="flex-1 space-y-8 flex flex-col">
            <div className="bg-white rounded-[48px] border border-slate-200 shadow-sm overflow-hidden flex-1 flex flex-col min-h-[500px]">
-              <div className="p-10 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
+              <div className="p-10 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center text-start">
                 <div>
                   <h3 className="text-xl font-black text-slate-800 tracking-tight">{language === 'ar' ? 'رادار النشاط' : 'Activity Radar'}</h3>
                   <p className="text-xs text-slate-500 font-medium">{t('monitoringDocs')}</p>
@@ -280,7 +301,7 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
                   <thead className="bg-white text-[10px] font-black text-slate-400 uppercase tracking-widest sticky top-0 border-b border-slate-100">
                     <tr>
                       <th className="px-10 py-6">{t('date')}</th>
-                      <th className="px-10 py-6">{language === 'ar' ? 'التحقق' : 'Validation'}</th>
+                      <th className="px-10 py-6">{language === 'ar' ? 'المصدر' : 'Source'}</th>
                       <th className="px-10 py-6">{t('startShift')}</th>
                       <th className="px-10 py-6">{t('stopShift')}</th>
                       <th className="px-10 py-6">{t('facialId')}</th>
@@ -291,12 +312,19 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
                       <tr key={rec.id} className="hover:bg-slate-50/30 transition-colors group">
                         <td className="px-10 py-6 font-black text-slate-900">{rec.date}</td>
                         <td className="px-10 py-6">
-                           <span className="text-sm font-bold text-slate-700">{rec.location}</span>
+                           <div className="flex flex-col text-start">
+                              <span className="text-sm font-bold text-slate-700">{rec.location}</span>
+                              <span className={`text-[9px] font-black uppercase tracking-widest ${rec.source === 'Hardware' ? 'text-indigo-600' : 'text-slate-400'}`}>
+                                 {rec.source === 'Hardware' ? '📠 Hardware' : (rec.source === 'Mobile' ? '📱 Mobile' : '💻 Web')}
+                              </span>
+                           </div>
                         </td>
                         <td className="px-10 py-6 font-mono text-sm font-black text-slate-600">{rec.clockIn}</td>
                         <td className="px-10 py-6 font-mono text-sm font-black text-slate-400">{rec.clockOut || '--:--'}</td>
                         <td className="px-10 py-6">
-                           <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 text-xs">🧬</div>
+                           <div className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs ${rec.source === 'Hardware' ? 'bg-indigo-50 border-indigo-100 text-indigo-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
+                              {rec.source === 'Hardware' ? '📠' : '🧬'}
+                           </div>
                         </td>
                       </tr>
                     ))}
@@ -337,7 +365,7 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ user }) => {
                        <div className="w-full h-full bg-slate-800 flex items-center justify-center text-slate-600 text-xs">---</div>
                      )}
                   </div>
-                  <div className="mt-6 space-y-2">
+                  <div className="mt-6 space-y-2 text-start">
                      <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 rounded-full border border-emerald-500/30">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                         <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">{t('syncing')}</span>

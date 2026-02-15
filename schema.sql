@@ -1,57 +1,76 @@
 
--- 1. BASE TABLES
-CREATE TABLE IF NOT EXISTS employees (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  name TEXT NOT NULL,
-  name_arabic TEXT,
-  nationality TEXT CHECK (nationality IN ('Kuwaiti', 'Expat')),
-  civil_id TEXT,
-  civil_id_expiry DATE,
-  pifss_number TEXT,
-  passport_number TEXT,
-  passport_expiry DATE,
-  izn_amal_expiry DATE,
-  department TEXT NOT NULL,
-  position TEXT NOT NULL,
-  position_arabic TEXT,
-  join_date DATE DEFAULT CURRENT_DATE,
-  salary NUMERIC NOT NULL DEFAULT 0,
-  status TEXT DEFAULT 'Active' CHECK (status IN ('Active', 'On Leave', 'Terminated')),
-  leave_balances JSONB DEFAULT '{"annual": 30, "sick": 15, "emergency": 6, "annualUsed": 0, "sickUsed": 0, "emergencyUsed": 0}',
-  training_hours NUMERIC DEFAULT 0,
-  work_days_per_week INTEGER DEFAULT 6,
-  iban TEXT,
-  bank_code TEXT,
-  face_token TEXT, -- Stores Base64 biometric reference image
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+-- 1. EXTENSIONS
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- 2. BRIDGE FUNCTION (Required for Admin Terminal)
+CREATE OR REPLACE FUNCTION run_sql(sql_query text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  EXECUTE sql_query;
+END;
+$$;
+
+-- 3. ENHANCE EMPLOYEES
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS name_arabic TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS department_arabic TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS position_arabic TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS face_token TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS device_user_id TEXT;
+
+-- 4. OFFICE LOCATIONS BILINGUAL
+CREATE TABLE IF NOT EXISTS office_locations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    name_arabic TEXT,
+    lat NUMERIC NOT NULL,
+    lng NUMERIC NOT NULL,
+    radius INTEGER DEFAULT 250,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
+ALTER TABLE office_locations ADD COLUMN IF NOT EXISTS name_arabic TEXT;
 
--- MIGRATION: ADD face_token IF MISSING (For existing deployments)
-DO $$ 
-BEGIN 
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='face_token') THEN
-    ALTER TABLE employees ADD COLUMN face_token TEXT;
-  END IF;
-END $$;
-
-CREATE TABLE IF NOT EXISTS leave_requests (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  employee_name TEXT NOT NULL,
-  department TEXT NOT NULL,
-  type TEXT NOT NULL,
-  start_date DATE NOT NULL,
-  end_date DATE NOT NULL,
-  days INTEGER NOT NULL,
-  reason TEXT,
-  status TEXT DEFAULT 'Pending',
-  manager_id UUID,
-  history JSONB DEFAULT '[]'::jsonb,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+-- 5. PUBLIC HOLIDAYS BILINGUAL
+CREATE TABLE IF NOT EXISTS public_holidays (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    name_arabic TEXT,
+    date DATE NOT NULL,
+    type TEXT,
+    is_fixed BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
+ALTER TABLE public_holidays ADD COLUMN IF NOT EXISTS name_arabic TEXT;
 
+-- 6. DEPARTMENT METRICS BILINGUAL
+CREATE TABLE IF NOT EXISTS department_metrics (
+    name TEXT PRIMARY KEY,
+    name_arabic TEXT,
+    kuwaiti_count INTEGER DEFAULT 0,
+    expat_count INTEGER DEFAULT 0,
+    target_ratio NUMERIC DEFAULT 30,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE department_metrics ADD COLUMN IF NOT EXISTS name_arabic TEXT;
+
+-- 7. RECONSTRUCT ANNOUNCEMENTS
+CREATE TABLE IF NOT EXISTS announcements (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    title_arabic TEXT,
+    content TEXT NOT NULL,
+    content_arabic TEXT,
+    priority TEXT DEFAULT 'Normal',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE announcements ADD COLUMN IF NOT EXISTS title_arabic TEXT;
+ALTER TABLE announcements ADD COLUMN IF NOT EXISTS content_arabic TEXT;
+
+-- 8. PAYROLL INFRASTRUCTURE
 CREATE TABLE IF NOT EXISTS payroll_runs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     period_key TEXT NOT NULL UNIQUE, 
     cycle_type TEXT,
     status TEXT DEFAULT 'Draft',
@@ -60,68 +79,31 @@ CREATE TABLE IF NOT EXISTS payroll_runs (
 );
 
 CREATE TABLE IF NOT EXISTS payroll_items (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     run_id UUID REFERENCES payroll_runs(id) ON DELETE CASCADE,
     employee_id UUID REFERENCES employees(id),
     employee_name TEXT,
-    basic_salary NUMERIC NOT NULL,
-    allowances NUMERIC DEFAULT 0,
-    deductions NUMERIC DEFAULT 0,
+    basic_salary NUMERIC NOT NULL DEFAULT 0,
+    housing_allowance NUMERIC DEFAULT 0,
+    other_allowances NUMERIC DEFAULT 0,
+    leave_deductions NUMERIC DEFAULT 0,
+    short_permission_deductions NUMERIC DEFAULT 0,
     pifss_deduction NUMERIC DEFAULT 0,
-    net_salary NUMERIC NOT NULL,
+    pifss_employer_share NUMERIC DEFAULT 0,
+    net_salary NUMERIC NOT NULL DEFAULT 0,
     verified_by_hr BOOLEAN DEFAULT FALSE,
     variance NUMERIC DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
-CREATE TABLE IF NOT EXISTS public_holidays (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  date DATE NOT NULL,
-  type TEXT,
-  is_fixed BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
+-- 9. REFRESH SCHEMA CACHE
+NOTIFY pgrst, 'reload schema';
 
--- 2. SYSTEM DEFINITION TABLES
-CREATE TABLE IF NOT EXISTS office_locations (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  lat NUMERIC NOT NULL,
-  lng NUMERIC NOT NULL,
-  radius NUMERIC NOT NULL DEFAULT 250,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS department_metrics (
-  name TEXT PRIMARY KEY,
-  kuwaiti_count INTEGER DEFAULT 0,
-  expat_count INTEGER DEFAULT 0,
-  target_ratio NUMERIC DEFAULT 30,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS attendance (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  employee_id UUID REFERENCES employees(id) ON DELETE CASCADE,
-  employee_name TEXT,
-  date DATE NOT NULL DEFAULT CURRENT_DATE,
-  clock_in TIME,
-  clock_out TIME,
-  location TEXT,
-  status TEXT,
-  coordinates JSONB,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
--- 3. PERMISSIONS
-ALTER TABLE employees DISABLE ROW LEVEL SECURITY;
-ALTER TABLE leave_requests DISABLE ROW LEVEL SECURITY;
+-- 10. PERMISSIONS
 ALTER TABLE payroll_runs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll_items DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public_holidays DISABLE ROW LEVEL SECURITY;
+ALTER TABLE announcements DISABLE ROW LEVEL SECURITY;
 ALTER TABLE office_locations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public_holidays DISABLE ROW LEVEL SECURITY;
 ALTER TABLE department_metrics DISABLE ROW LEVEL SECURITY;
-ALTER TABLE attendance DISABLE ROW LEVEL SECURITY;
-
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;

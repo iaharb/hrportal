@@ -11,29 +11,101 @@ import PayrollView from './components/PayrollView.tsx';
 import SettlementView from './components/SettlementView.tsx';
 import AttendanceView from './components/AttendanceView.tsx';
 import AdminCenter from './components/AdminCenter.tsx';
-import AddEmployeeModal from './components/AddEmployeeModal.tsx';
+import Whitepaper from './components/Whitepaper.tsx';
+import MandoobDashboard from './components/MandoobDashboard.tsx';
+import EmployeeModal from './components/AddEmployeeModal.tsx';
+import IntelligentTicker from './components/IntelligentTicker.tsx';
 import Login from './components/Login.tsx';
 import MobileApp from './mobile/App.tsx';
 import MobileLogin from './mobile/Login.tsx';
-import { View, User, Notification } from './types.ts';
+import { View, User, Notification, Employee } from './types.ts';
 import { dbService } from './services/dbService.ts';
 import { useTranslation } from 'react-i18next';
 
+const ScopeDirectoryModal: React.FC<{ 
+  isOpen: boolean; 
+  onClose: () => void; 
+  user: User; 
+  language: string; 
+}> = ({ isOpen, onClose, user, language }) => {
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const isAr = language === 'ar';
+
+  useEffect(() => {
+    if (isOpen) {
+      dbService.getEmployees().then(data => {
+        if (user.role === 'Admin') {
+          setEmployees(data);
+        } else {
+          // Rule: Departments scopes include their members + always the CEO for oversight
+          setEmployees(data.filter(e => {
+             const isCEO = e.position.toLowerCase().includes('ceo');
+             const isInDept = e.department === user.department;
+             return isCEO || isInDept;
+          }));
+        }
+      });
+    }
+  }, [isOpen, user]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose}></div>
+      <div className="bg-white rounded-[40px] w-full max-w-lg shadow-2xl relative z-10 overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-300">
+        <div className="p-8 border-b border-slate-100 bg-slate-50 flex justify-between items-center text-start">
+           <div>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">{isAr ? 'هيكل النطاق الوظيفي' : 'Scope Directory Structure'}</h3>
+              <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-1">Registry Context: {user.department || 'Global'}</p>
+           </div>
+           <button onClick={onClose} className="text-slate-400 font-bold text-2xl hover:text-slate-600 transition-colors">×</button>
+        </div>
+        <div className="p-6 max-h-[60vh] overflow-y-auto space-y-3">
+           {employees.sort((a,b) => {
+             const pA = a.position.toLowerCase();
+             const pB = b.position.toLowerCase();
+             if (pA.includes('ceo')) return -1;
+             if (pB.includes('ceo')) return 1;
+             return 0;
+           }).map((emp) => (
+             <div key={emp.id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:bg-white hover:border-indigo-200 transition-all text-start">
+                <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-xs relative">
+                   {emp.faceToken ? <img src={emp.faceToken} className="w-full h-full object-cover rounded-xl grayscale" /> : emp.name[0]}
+                   {emp.position.toLowerCase().includes('ceo') && (
+                     <div className="absolute -top-1 -right-1 text-[8px]">👑</div>
+                   )}
+                </div>
+                <div>
+                   <p className="text-sm font-black text-slate-800 leading-none">{isAr && emp.nameArabic ? emp.nameArabic : emp.name}</p>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase mt-1.5">
+                     {isAr && emp.positionArabic ? emp.positionArabic : emp.position}
+                     <span className="ms-2 opacity-40">•</span>
+                     <span className="ms-2">{isAr && emp.departmentArabic ? emp.departmentArabic : emp.department}</span>
+                   </p>
+                </div>
+             </div>
+           ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   const { t, i18n } = useTranslation();
-  
-  // Default to Dashboard. Hash-based or state-based routing is safer for ephemeral previews.
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setView] = useState<View>(View.Dashboard);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isScopeModalOpen, setIsScopeModalOpen] = useState(false);
+  const [employeeToEdit, setEmployeeToEdit] = useState<Employee | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>(window.innerWidth < 768 ? 'mobile' : 'desktop');
+  const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>(window.innerWidth < 1024 ? 'mobile' : 'desktop');
   const notificationRef = useRef<HTMLDivElement>(null);
 
-  // Normalize language to ensure safe access to translation objects
-  const language = (i18n.language && i18n.language.startsWith('ar')) ? 'ar' : 'en';
+  const language = i18n.language as 'en' | 'ar';
 
   const setLanguage = (lang: 'en' | 'ar') => {
     i18n.changeLanguage(lang);
@@ -51,15 +123,17 @@ const App: React.FC = () => {
       case View.Settlement: return t('settlement');
       case View.Attendance: return t('attendance');
       case View.AdminCenter: return t('adminCenter');
+      case View.Whitepaper: return t('whitepaper');
+      case View.Mandoob: return language === 'ar' ? 'أعمال المندوب' : 'Mandoob Dashboard';
       default: return '';
     }
   };
 
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < 768 && viewMode === 'desktop') {
+      if (window.innerWidth < 1024 && viewMode === 'desktop') {
         setViewMode('mobile');
-      } else if (window.innerWidth >= 768 && viewMode === 'mobile' && !localStorage.getItem('force_mobile')) {
+      } else if (window.innerWidth >= 1024 && viewMode === 'mobile' && !localStorage.getItem('force_mobile')) {
         setViewMode('desktop');
       }
     };
@@ -71,7 +145,9 @@ const App: React.FC = () => {
     if (currentUser) {
       if (currentUser.role === 'Employee') {
         setView(View.Profile);
-      } 
+      } else {
+        setView(View.Dashboard);
+      }
       fetchNotifications();
     }
   }, [currentUser]);
@@ -90,6 +166,16 @@ const App: React.FC = () => {
   const handleRefresh = () => {
     setRefreshKey(prev => prev + 1);
     fetchNotifications();
+  };
+
+  const handleEditEmployee = (emp: Employee) => {
+    setEmployeeToEdit(emp);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEmployeeToEdit(null);
   };
 
   const toggleViewMode = () => {
@@ -136,7 +222,7 @@ const App: React.FC = () => {
          <Login onLogin={setCurrentUser} language={language} />
          <button 
            onClick={() => setViewMode('mobile')}
-           className={`fixed top-6 ${language === 'ar' ? 'left-6' : 'right-6'} z-[100] bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl`}
+           className={`fixed top-6 ${language === 'ar' ? 'left-6' : 'right-6'} z-[100] bg-slate-900/90 backdrop-blur-md text-white px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider shadow-xl border border-white/10`}
          >
            📱 {language === 'ar' ? 'خدمة الهاتف' : 'Mobile ESS'}
          </button>
@@ -149,7 +235,7 @@ const App: React.FC = () => {
       case View.Dashboard:
         return <Dashboard user={currentUser} onNavigate={setView} key={`dash-${refreshKey}`} language={language} />;
       case View.Directory:
-        return <EmployeeDirectory user={currentUser} onAddClick={() => setIsModalOpen(true)} key={`dir-${refreshKey}`} language={language} />;
+        return <EmployeeDirectory user={currentUser} onAddClick={() => setIsModalOpen(true)} onEditClick={handleEditEmployee} key={`dir-${refreshKey}`} language={language} />;
       case View.Insights:
         return <AiInsights key={`ai-${refreshKey}`} />;
       case View.Compliance:
@@ -166,6 +252,10 @@ const App: React.FC = () => {
         return <AttendanceView user={currentUser} key={`attend-${refreshKey}`} />;
       case View.AdminCenter:
         return <AdminCenter key={`admin-${refreshKey}`} />;
+      case View.Whitepaper:
+        return <Whitepaper key={`wp-${refreshKey}`} />;
+      case View.Mandoob:
+        return <MandoobDashboard key={`mandoob-${refreshKey}`} />;
       default:
         return <Dashboard user={currentUser} onNavigate={setView} language={language} />;
     }
@@ -175,7 +265,7 @@ const App: React.FC = () => {
 
   return (
     <div 
-      className={`flex min-h-screen bg-[#F8FAFC] selection:bg-emerald-100 font-sans animate-in fade-in duration-500`}
+      className={`flex min-h-screen bg-[#F8FAFC] selection:bg-indigo-100 font-sans animate-in fade-in duration-500`}
       dir={language === 'ar' ? 'rtl' : 'ltr'}
     >
       <Sidebar 
@@ -186,71 +276,73 @@ const App: React.FC = () => {
         setLanguage={setLanguage}
         onLogout={() => setCurrentUser(null)}
         onToggleMobile={toggleViewMode}
+        onAddMember={() => { setEmployeeToEdit(null); setIsModalOpen(true); }}
       />
       
       <main className="flex-1 min-w-0">
-        <div className="h-full px-12 py-10 max-w-[1600px] mx-auto">
-          <div className="flex items-center justify-between mb-16">
+        <div className="h-full px-12 py-8 max-w-[1500px] mx-auto">
+          <div className="flex items-center justify-between mb-12">
             <div className="space-y-1">
-              <nav className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">
-                <span className="hover:text-emerald-600 transition-colors cursor-pointer" onClick={() => setView(View.Dashboard)}>{t('enterprise')}</span>
-                <span className="text-slate-200">/</span>
-                <span className="text-emerald-600">{getViewTitle(currentView)}</span>
-              </nav>
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight">
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                <span className="hover:text-indigo-600 transition-colors cursor-pointer" onClick={() => setView(View.Dashboard)}>{t('enterprise')}</span>
+                <span className="text-slate-300">/</span>
+                <span className="text-indigo-600">{getViewTitle(currentView)}</span>
+              </div>
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">
                 {getViewTitle(currentView)}
               </h1>
             </div>
             
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4">
               <div className="relative" ref={notificationRef}>
                 <button 
                   onClick={() => setShowNotifications(!showNotifications)}
-                  className={`w-14 h-14 rounded-3xl flex items-center justify-center border transition-all active:scale-95 ${
-                    showNotifications ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-400 border-slate-200 hover:border-emerald-500/30 shadow-sm'
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center border transition-all active:scale-95 ${
+                    showNotifications ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300 shadow-sm'
                   }`}
                 >
-                  <span className="text-2xl">🔔</span>
+                  <span className="text-xl">🔔</span>
                   {unreadCount > 0 && (
-                    <span className={`absolute -top-1 ${language === 'ar' ? '-left-1' : '-right-1'} w-6 h-6 bg-rose-500 text-white text-[11px] font-black rounded-full border-4 border-[#F8FAFC] flex items-center justify-center animate-bounce`}>
+                    <span className={`absolute -top-1 ${language === 'ar' ? '-left-1' : '-right-1'} w-5 h-5 bg-rose-500 text-white text-[9px] font-black rounded-full border-2 border-[#F8FAFC] flex items-center justify-center`}>
                       {unreadCount}
                     </span>
                   )}
                 </button>
               </div>
 
-              <div className="bg-white px-6 py-3 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4 h-14">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
-                <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">
-                  {currentUser.role === 'Admin' ? 'Global Controller' : `${currentUser.department} Scope`}
+              <button 
+                onClick={() => setIsScopeModalOpen(true)}
+                className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3 h-11 hover:bg-slate-50 transition-all group"
+              >
+                <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(79,70,229,0.3)] animate-pulse group-hover:scale-125 transition-transform"></div>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                  {currentUser.role === 'Admin' ? 'Global Admin' : `${currentUser.department} Scope`}
                 </span>
-              </div>
+              </button>
             </div>
           </div>
 
-          <div className="pb-32">
+          <IntelligentTicker />
+
+          <div className="pb-24">
             {renderView()}
           </div>
         </div>
       </main>
 
-      {(currentUser.role === 'Admin' || currentUser.role === 'Manager') && (
-        <div className={`fixed bottom-12 z-50 ${language === 'ar' ? 'left-12' : 'right-12'}`}>
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="bg-slate-900 text-white px-10 py-5 rounded-[32px] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] hover:bg-black hover:scale-105 transition-all flex items-center justify-center gap-4 active:scale-95 group overflow-hidden relative"
-          >
-            <span className="font-black text-[12px] uppercase tracking-widest relative z-10">{t('addMember')}</span>
-            <span className="text-3xl font-light relative z-10 transition-transform group-hover:rotate-90">+</span>
-          </button>
-        </div>
-      )}
-
-      <AddEmployeeModal 
+      <EmployeeModal 
         isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+        onClose={handleCloseModal} 
         language={language}
         onSuccess={handleRefresh}
+        employeeToEdit={employeeToEdit}
+      />
+
+      <ScopeDirectoryModal
+        isOpen={isScopeModalOpen}
+        onClose={() => setIsScopeModalOpen(false)}
+        user={currentUser}
+        language={language}
       />
     </div>
   );

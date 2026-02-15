@@ -18,16 +18,11 @@ const MobileAttendance: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ use
   const [scanStatus, setScanStatus] = useState<'Awaiting' | 'Processing' | 'Success'>('Awaiting');
   const videoRef = useRef<HTMLVideoElement>(null);
   
-  const t = translations[language] || translations.en;
+  const t = translations[language];
 
   const handleStartScan = async () => {
     if (!isValid) {
       notify(t.unauthorizedZone, language === 'ar' ? "يجب أن تكون ضمن نطاق ٢٥٠ متر من المكتب." : "You must be within 250m of the office.", "error");
-      return;
-    }
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      notify("Hardware Restricted", "Biometric camera access is not available in this environment.", "error");
       return;
     }
 
@@ -45,9 +40,7 @@ const MobileAttendance: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ use
         setScanStatus('Success');
         setTimeout(async () => {
           // Stop stream
-          if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-          }
+          stream.getTracks().forEach(track => track.stop());
           setIsScanning(false);
           await finishClockAction();
         }, 1000);
@@ -64,6 +57,7 @@ const MobileAttendance: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ use
     if (!activeShift) {
       const now = new Date();
       localStorage.setItem('shift_start', Date.now().toString());
+      // Fix: Added missing 'source' property required by AttendanceRecord
       await dbService.logAttendance({
         employeeId: user.id,
         employeeName: user.name,
@@ -71,6 +65,7 @@ const MobileAttendance: React.FC<{ user: User, language: 'en' | 'ar' }> = ({ use
         clockIn: now.toLocaleTimeString(),
         location: closestZone?.name || 'Mobile Site',
         status: 'On-Site',
+        source: 'Mobile',
         coordinates: { lat: 0, lng: 0 }
       });
       setActiveShift(true);

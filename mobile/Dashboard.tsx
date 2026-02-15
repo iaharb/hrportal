@@ -7,7 +7,7 @@ import { translations } from '../translations.ts';
 const MobileDashboard: React.FC<{ user: User, language: 'en' | 'ar', onNavigate: (t: any) => void, onLogout?: () => void }> = ({ user, language, onNavigate, onLogout }) => {
   const [timer, setTimer] = useState("00:00:00");
   const [balances, setBalances] = useState({ annual: 0, sick: 0 });
-  const t = translations[language] || translations.en;
+  const t = translations[language];
 
   useEffect(() => {
     const fetch = async () => {
@@ -37,14 +37,12 @@ const MobileDashboard: React.FC<{ user: User, language: 'en' | 'ar', onNavigate:
     return () => clearInterval(interval);
   }, [user]);
 
-  const firstName = (user.name || '').split(' ')[0] || 'User';
-
   return (
     <div className="p-6 space-y-6">
       {/* Welcome Card */}
       <div className="bg-slate-900 rounded-[32px] p-8 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 p-6 opacity-10">🇰🇼</div>
-        <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-1">{t.welcome}, {firstName}</p>
+        <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-1">{t.welcome}, {user.name.split(' ')[0]}</p>
         <h2 className="text-2xl font-black tracking-tight mb-6">{t.readyShift}</h2>
         
         <div className="flex items-end justify-between">

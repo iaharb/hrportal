@@ -12,9 +12,10 @@ interface SidebarProps {
   setLanguage: (lang: 'en' | 'ar') => void;
   onLogout: () => void;
   onToggleMobile?: () => void;
+  onAddMember: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, language, setLanguage, onLogout, onToggleMobile }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, language, setLanguage, onLogout, onToggleMobile, onAddMember }) => {
   const { t } = useTranslation();
   const [dbStatus, setDbStatus] = useState<{ type: 'testing' | 'live' | 'mock', latency?: number }>({ type: 'testing' });
 
@@ -34,97 +35,132 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, user, language,
   }, []);
   
   const allItems = [
-    { id: View.Dashboard, label: t('dashboard'), icon: '📊', roles: ['Admin', 'Manager', 'HR'] },
-    { id: View.AdminCenter, label: t('adminCenter'), icon: '🛡️', roles: ['Admin', 'HR'] },
-    { id: View.Profile, label: t('profile'), icon: '👤', roles: ['Employee', 'Manager', 'Admin', 'HR'] },
-    { id: View.Attendance, label: t('attendance'), icon: '📍', roles: ['Employee', 'Manager', 'Admin', 'HR'] },
-    { id: View.Leaves, label: t('leaves'), icon: '📅', roles: ['Admin', 'Manager', 'Employee', 'HR'] },
-    { id: View.Directory, label: t('directory'), icon: '👥', roles: ['Admin', 'Manager', 'HR'] },
-    { id: View.Payroll, label: t('payroll'), icon: '💰', roles: ['Admin', 'HR'] },
-    { id: View.Settlement, label: t('settlement'), icon: '📜', roles: ['Admin', 'HR'] },
-    { id: View.Insights, label: t('insights'), icon: '✨', roles: ['Admin', 'Manager', 'HR'] },
-    { id: View.Compliance, label: t('compliance'), icon: '⚖️', roles: ['Admin', 'HR'] },
+    { id: View.Dashboard, label: t('dashboard'), icon: 'layout-grid', roles: ['Admin', 'Manager', 'HR', 'Mandoob'] },
+    { id: View.AdminCenter, label: t('adminCenter'), icon: 'shield', roles: ['Admin', 'HR'] },
+    { id: View.Mandoob, label: language === 'ar' ? 'أعمال المندوب' : 'Mandoob PRO', icon: 'passport', roles: ['Admin', 'HR', 'Mandoob'] },
+    { id: View.Profile, label: t('profile'), icon: 'user', roles: ['Employee', 'Manager', 'Admin', 'HR'] },
+    { id: View.Attendance, label: t('attendance'), icon: 'map-pin', roles: ['Employee', 'Manager', 'Admin', 'HR'] },
+    { id: View.Leaves, label: t('leaves'), icon: 'calendar', roles: ['Admin', 'Manager', 'Employee', 'HR'] },
+    { id: View.Directory, label: t('directory'), icon: 'users', roles: ['Admin', 'Manager', 'HR'] },
+    { id: View.Payroll, label: t('payroll'), icon: 'banknote', roles: ['Admin', 'HR'] },
+    { id: View.Settlement, label: t('settlement'), icon: 'file-text', roles: ['Admin', 'HR'] },
+    { id: View.Insights, label: t('insights'), icon: 'sparkles', roles: ['Admin', 'Manager', 'HR'] },
+    { id: View.Compliance, label: t('compliance'), icon: 'scale', roles: ['Admin', 'HR'] },
+    { id: View.Whitepaper, label: t('whitepaper'), icon: 'book-open', roles: ['Admin', 'HR'] },
   ];
+
+  const getIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'layout-grid': return '📊';
+      case 'shield': return '🛡️';
+      case 'passport': return '🛂';
+      case 'user': return '👤';
+      case 'map-pin': return '📍';
+      case 'calendar': return '📅';
+      case 'users': return '👥';
+      case 'banknote': return '💰';
+      case 'file-text': return '📜';
+      case 'sparkles': return '✨';
+      case 'scale': return '⚖️';
+      case 'book-open': return '📑';
+      default: return '•';
+    }
+  };
 
   const filteredItems = allItems.filter(item => item.roles.includes(user.role));
 
   return (
-    <div className="w-80 bg-white border-e border-slate-200 h-screen sticky top-0 flex flex-col z-[80]">
-      <div className="p-8 border-b border-slate-100">
-        <h1 className="text-2xl font-black text-slate-900 flex items-center gap-3">
-          <span className="p-2 bg-emerald-500 text-white rounded-2xl shadow-lg shadow-emerald-500/20">🇰🇼</span> 
-          Enterprise <span className="text-emerald-600">HR</span>
+    <div className="w-72 bg-white border-e border-slate-200/60 h-screen sticky top-0 flex flex-col z-[80] shadow-[1px_0_0_0_rgba(0,0,0,0.02)]">
+      <div className="p-8 pb-4 text-start">
+        <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-3 tracking-tight">
+          <span className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20 text-lg">🇰🇼</span> 
+          <span>Enterprise <span className="text-indigo-600">HR</span></span>
         </h1>
-        <button 
+        
+        <div 
           onClick={checkConnection}
-          className="flex items-center gap-2 mt-4 group cursor-pointer hover:opacity-80 transition-opacity"
+          className="inline-flex items-center gap-2 mt-6 px-3 py-1.5 bg-slate-50 rounded-full border border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors"
         >
-          <div className={`w-2.5 h-2.5 rounded-full ${
+          <div className={`w-2 h-2 rounded-full ${
             dbStatus.type === 'testing' ? 'bg-slate-300 animate-pulse' : 
-            dbStatus.type === 'live' ? (dbStatus.latency && dbStatus.latency > 500 ? 'bg-amber-400' : 'bg-emerald-500 animate-pulse') : 'bg-rose-500'
+            dbStatus.type === 'live' ? 'bg-indigo-500 shadow-[0_0_8px_rgba(79,70,229,0.4)]' : 'bg-rose-500'
           }`}></div>
-          <p className="text-[10px] text-slate-400 font-black tracking-[0.2em] uppercase opacity-80 flex items-center gap-2">
+          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
             {dbStatus.type === 'testing' ? t('syncing') : 
-             dbStatus.type === 'live' ? `${t('origin')}: ${dbStatus.latency}ms` : t('unknown')}
-          </p>
-        </button>
+             dbStatus.type === 'live' ? `${dbStatus.latency}ms Latency` : 'Offline'}
+          </span>
+        </div>
       </div>
       
-      <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
+      <nav className="flex-1 px-4 space-y-1 overflow-y-auto mt-6">
+        {(user.role === 'Admin' || user.role === 'HR') && (
+          <button
+            onClick={onAddMember}
+            className="w-full flex items-center gap-3.5 px-4 py-4 rounded-2xl text-sm font-black transition-all bg-indigo-600 text-white shadow-xl shadow-indigo-600/20 mb-6 hover:bg-indigo-700 active:scale-95 group border border-indigo-500"
+          >
+            <div className="w-6 h-6 bg-white/20 rounded-lg flex items-center justify-center transition-transform group-hover:rotate-90">
+              <span className="text-white font-black text-lg">+</span>
+            </div>
+            <span className="tracking-tight uppercase text-[11px] font-extrabold">{t('addMember')}</span>
+          </button>
+        )}
+
         {filteredItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setView(item.id)}
-            className={`w-full flex items-center gap-4 px-5 py-4 rounded-[20px] text-sm font-black transition-all group ${
+            className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition-all group ${
               currentView === item.id
-                ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/10 scale-[1.02]'
-                : 'text-slate-400 hover:bg-slate-50 hover:text-slate-900'
+                ? 'bg-slate-900 text-white shadow-md'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
             }`}
           >
-            <span className={`text-xl transition-transform group-hover:scale-110 ${currentView === item.id ? '' : 'grayscale'}`}>{item.icon}</span>
-            <span className="text-[15px]">{item.label}</span>
+            <span className={`text-lg transition-transform group-hover:scale-110 ${currentView === item.id ? '' : 'opacity-70'}`}>
+              {getIcon(item.icon)}
+            </span>
+            <span className="tracking-tight text-start flex-1">{item.label}</span>
           </button>
         ))}
       </nav>
 
-      <div className="p-6 space-y-4">
+      <div className="p-4 space-y-3 mt-auto mb-4">
         {onToggleMobile && (
           <button 
             onClick={onToggleMobile}
-            className="w-full py-4 bg-indigo-50 border border-indigo-100 rounded-2xl text-[10px] font-black text-indigo-600 hover:bg-indigo-100 transition-all uppercase tracking-[0.2em] flex items-center justify-center gap-3"
+            className="w-full py-3 bg-indigo-50 text-indigo-600 rounded-xl text-[11px] font-bold hover:bg-indigo-100 transition-all uppercase tracking-wider flex items-center justify-center gap-2"
           >
             <span>📱</span> {t('switchToMobile')}
           </button>
         )}
 
-        <div className="flex bg-slate-100 p-1 rounded-2xl">
+        <div className="flex bg-slate-100 p-1 rounded-xl">
           <button 
             onClick={() => setLanguage('en')}
-            className={`flex-1 py-2 text-[10px] font-black rounded-xl transition-all ${language === 'en' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}
+            className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all ${language === 'en' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}
           >
-            ENGLISH
+            EN
           </button>
           <button 
             onClick={() => setLanguage('ar')}
-            className={`flex-1 py-2 text-[10px] font-black rounded-xl transition-all ${language === 'ar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}
+            className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all ${language === 'ar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}
           >
-            عربي
+            AR
           </button>
         </div>
 
-        <div className="bg-slate-50 rounded-[32px] p-6 border border-slate-100">
-           <div className="flex items-center gap-4 mb-5">
-             <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center font-black text-sm shadow-md">
-                {user.name && user.name.length > 0 ? user.name[0] : 'U'}
+        <div className="pt-4 border-t border-slate-100">
+           <div className="flex items-center gap-3 mb-4 px-2 text-start">
+             <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
+                {user.name[0]}
              </div>
              <div className="min-w-0 flex-1">
-               <p className="text-[13px] font-bold text-slate-900 truncate tracking-tight">{language === 'ar' ? (user as any).nameArabic || user.name : user.name}</p>
-               <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{user.role}</p>
+               <p className="text-xs font-bold text-slate-900 truncate leading-none">{language === 'ar' ? (user as any).nameArabic || user.name : user.name}</p>
+               <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mt-1">{user.role}</p>
              </div>
            </div>
            <button 
              onClick={onLogout}
-             className="w-full py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black text-slate-500 hover:text-rose-600 hover:border-rose-100 hover:bg-rose-50/50 transition-all uppercase tracking-[0.2em] shadow-sm"
+             className="w-full py-2.5 text-[11px] font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all uppercase tracking-wider"
            >
              {t('terminateSession')}
            </button>

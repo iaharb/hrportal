@@ -5,6 +5,7 @@ import MobileDashboard from './Dashboard.tsx';
 import MobileAttendance from './Attendance.tsx';
 import MobileExpenses from './Expenses.tsx';
 import MobileLeaves from './Leaves.tsx';
+import IntelligentTicker from '../components/IntelligentTicker.tsx';
 import { useTranslation } from 'react-i18next';
 
 interface MobileAppProps {
@@ -47,13 +48,15 @@ const MobileApp: React.FC<MobileAppProps> = ({ user, language, setLanguage, onLo
              🚪
            </button>
            <div className="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-sm border border-slate-800">
-             {user.name ? user.name[0] : 'U'}
+             {user.name[0]}
            </div>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto pb-32">
+      <main className="flex-1 overflow-y-auto pb-32 pt-4 px-4">
+        <IntelligentTicker />
+        
         {activeTab === 'home' && <MobileDashboard user={user} language={language} onNavigate={setActiveTab} onLogout={onLogout} />}
         {activeTab === 'clock' && <MobileAttendance user={user} language={language} />}
         {activeTab === 'expenses' && <MobileExpenses user={user} language={language} />}
