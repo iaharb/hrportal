@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  portal-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+        - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+        - API_KEY=${API_KEY}
+    container_name: hrms-portal-frontend
+    ports:
+      - "8080:80"
+    restart: always
+    networks:
+      - hrms-network
+
+networks:
+  hrms-network:
+    external: true # Assumes your Supabase container is already on this network

@@ -30,7 +30,6 @@ CREATE TABLE IF NOT EXISTS office_locations (
     radius INTEGER DEFAULT 250,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
-ALTER TABLE office_locations ADD COLUMN IF NOT EXISTS name_arabic TEXT;
 
 -- 5. PUBLIC HOLIDAYS BILINGUAL
 CREATE TABLE IF NOT EXISTS public_holidays (
@@ -42,7 +41,6 @@ CREATE TABLE IF NOT EXISTS public_holidays (
     is_fixed BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
-ALTER TABLE public_holidays ADD COLUMN IF NOT EXISTS name_arabic TEXT;
 
 -- 6. DEPARTMENT METRICS BILINGUAL
 CREATE TABLE IF NOT EXISTS department_metrics (
@@ -53,7 +51,6 @@ CREATE TABLE IF NOT EXISTS department_metrics (
     target_ratio NUMERIC DEFAULT 30,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
-ALTER TABLE department_metrics ADD COLUMN IF NOT EXISTS name_arabic TEXT;
 
 -- 7. RECONSTRUCT ANNOUNCEMENTS
 CREATE TABLE IF NOT EXISTS announcements (
@@ -65,8 +62,6 @@ CREATE TABLE IF NOT EXISTS announcements (
     priority TEXT DEFAULT 'Normal',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
-ALTER TABLE announcements ADD COLUMN IF NOT EXISTS title_arabic TEXT;
-ALTER TABLE announcements ADD COLUMN IF NOT EXISTS content_arabic TEXT;
 
 -- 8. PAYROLL INFRASTRUCTURE
 CREATE TABLE IF NOT EXISTS payroll_runs (

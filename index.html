@@ -38,8 +38,9 @@
       -moz-osx-font-smoothing: grayscale;
     }
     
-    [dir="rtl"] {
-      font-family: 'Cairo', sans-serif !important;
+    /* Stronger RTL font enforcement with local fallbacks */
+    [dir="rtl"], [dir="rtl"] * {
+      font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif !important;
     }
 
     /* Premium SaaS Components */
@@ -80,6 +81,8 @@
     }
     .animate-ticker-pro {
       animation: ticker-slide 320s linear infinite;
+      display: inline-block;
+      min-width: 100%;
     }
 
     /* Input Styling */

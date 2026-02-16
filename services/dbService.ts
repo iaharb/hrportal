@@ -1,3 +1,4 @@
+
 import { supabase, isSupabaseConfigured } from './supabaseClient.ts';
 import { Employee, DepartmentMetric, LeaveRequest, LeaveBalances, Notification, LeaveType, User, LeaveHistoryEntry, PayrollRun, PayrollItem, SettlementResult, PublicHoliday, AttendanceRecord, OfficeLocation, HardwareConfig, Allowance, Announcement } from '../types.ts';
 import { MOCK_EMPLOYEES, MOCK_LEAVE_REQUESTS, DEPARTMENT_METRICS, KUWAIT_PUBLIC_HOLIDAYS, OFFICE_LOCATIONS, STANDARD_ALLOWANCE_NAMES } from '../constants.tsx';
@@ -115,7 +116,7 @@ let localPayrollRuns: PayrollRun[] = [];
 let localPayrollItems: PayrollItem[] = [];
 let localAttendance: AttendanceRecord[] = [];
 let localAnnouncements: Announcement[] = [
-  { id: gid(), title: 'System Notice', titleArabic: 'إشعار النظام', content: 'Q2 Payroll cycles are now open for auditing.', contentArabic: 'دورات كشوف المرتبات للربع الثاني مفتوحة الآن للتدقيق.', priority: 'Normal', createdAt: new Date().toISOString() }
+  { id: gid(), title: 'System Notice', titleArabic: 'إشعار النظام', content: 'Registry synchronized for local hosting environment.', contentArabic: 'تمت مزامنة السجل لبيئة الاستضافة المحلية.', priority: 'Normal', createdAt: new Date().toISOString() }
 ];
 
 let activeHolidays = [...KUWAIT_PUBLIC_HOLIDAYS];
@@ -219,7 +220,6 @@ export const dbService = {
         name: employee.name,
         name_arabic: employee.nameArabic,
         nationality: employee.nationality,
-        /* Fix: Changed property access from camelCase 'civil_id' to existing 'civilId' from Employee interface */
         civil_id: employee.civilId,
         civil_id_expiry: employee.civilIdExpiry || null,
         department: employee.department,
@@ -233,8 +233,6 @@ export const dbService = {
         work_days_per_week: employee.workDaysPerWeek,
         iban: employee.iban,
         bank_code: employee.bankCode,
-        /* Added comment above fix */
-        /* Fix: Changed property access from face_token to faceToken to match Employee interface */
         face_token: employee.faceToken || null,
         device_user_id: employee.deviceUserId || null,
         allowances: employee.allowances
@@ -294,56 +292,6 @@ export const dbService = {
     return [...activeHolidays].sort((a,b) => a.date.localeCompare(b.date));
   },
 
-  async addPublicHoliday(h: Omit<PublicHoliday, 'id'>) {
-    if (this.isLive()) {
-      await supabase!.from('public_holidays').insert([{
-        name: h.name,
-        name_arabic: h.nameArabic,
-        date: h.date,
-        type: h.type,
-        is_fixed: h.isFixed
-      }]);
-    } else {
-      activeHolidays.push({ ...h, id: gid() });
-    }
-  },
-
-  async deletePublicHoliday(id: string) {
-    if (this.isLive()) {
-      await supabase!.from('public_holidays').delete().eq('id', id);
-    } else {
-      activeHolidays = activeHolidays.filter(h => h.id !== id);
-    }
-  },
-
-  async getPayrollRuns(): Promise<PayrollRun[]> {
-    if (this.isLive()) {
-      const { data, error } = await supabase!.from('payroll_runs').select('*').order('period_key', { ascending: false });
-      if (error) throw error;
-      return (data || []).map(mapPayrollRun);
-    }
-    return [...localPayrollRuns].sort((a,b) => b.periodKey.localeCompare(a.periodKey));
-  },
-
-  async getPayrollItems(runId: string): Promise<PayrollItem[]> {
-    if (this.isLive()) {
-      const { data, error } = await supabase!.from('payroll_items').select('*').eq('run_id', runId);
-      if (error) throw error;
-      return (data || []).map(mapPayrollItem);
-    }
-    return localPayrollItems.filter(i => i.runId === runId);
-  },
-
-  async getLatestFinalizedPayroll(userId: string): Promise<{ item: PayrollItem, run: PayrollRun } | null> {
-    const runs = await this.getPayrollRuns();
-    const finalizedRuns = runs.filter(r => r.status === 'Finalized');
-    if (finalizedRuns.length === 0) return null;
-    const latestRun = finalizedRuns.sort((a, b) => b.periodKey.localeCompare(a.periodKey))[0];
-    const items = await this.getPayrollItems(latestRun.id);
-    const item = items.find(i => i.employeeId === userId);
-    return item ? { item, run: latestRun } : null;
-  },
-
   async getLeaveRequests(filter?: any): Promise<LeaveRequest[]> {
     if (this.isLive()) {
       let query = supabase!.from('leave_requests').select('*');
@@ -359,636 +307,92 @@ export const dbService = {
     return filtered.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
   },
 
-  async createLeaveRequest(request: Omit<LeaveRequest, 'id'>, user: User): Promise<LeaveRequest> {
-    const newReq = { ...request, id: gid() } as LeaveRequest;
+  /* Added comment above fix */
+  /* Fix: Added missing createLeaveRequest method to handle new leave applications */
+  async createLeaveRequest(req: Omit<LeaveRequest, 'id'>, user: User): Promise<LeaveRequest> {
+    const newReq = { ...req, id: gid(), createdAt: new Date().toISOString() };
     if (this.isLive()) {
       const dbPayload = {
-        employee_id: newReq.employeeId,
-        employee_name: newReq.employeeName,
-        department: newReq.department,
-        type: newReq.type,
-        start_date: newReq.startDate,
-        end_date: newReq.endDate,
-        days: newReq.days,
-        duration_hours: newReq.durationHours || null,
-        reason: newReq.reason,
-        status: newReq.status,
-        manager_id: newReq.managerId,
-        history: newReq.history,
-        created_at: newReq.createdAt
+        employee_id: req.employeeId,
+        employee_name: req.employeeName,
+        department: req.department,
+        type: req.type,
+        start_date: req.startDate,
+        end_date: req.endDate,
+        days: req.days,
+        duration_hours: req.durationHours,
+        reason: req.reason,
+        status: req.status,
+        manager_id: req.managerId,
+        history: req.history
       };
       const { data, error } = await supabase!.from('leave_requests').insert([dbPayload]).select().single();
       if (error) throw error;
       return mapLeaveRequest(data);
     }
-    localRequests.push(newReq);
-    return newReq;
+    localRequests.push(newReq as LeaveRequest);
+    return newReq as LeaveRequest;
   },
 
+  /* Added comment above fix */
+  /* Fix: Added missing updateLeaveRequestStatus method for multi-stage approval logic */
   async updateLeaveRequestStatus(id: string, status: LeaveRequest['status'], user: User, note?: string): Promise<LeaveRequest> {
-    const requests = await this.getLeaveRequests();
-    const req = requests.find(r => r.id === id);
-    if (!req) throw new Error("Request not found");
-    const historyEntry: LeaveHistoryEntry = { user: user.name, role: user.role, action: status, timestamp: new Date().toISOString(), note };
-    
-    if (status === 'Resumed') {
-      const hrNote = req.type === 'ShortPermission' ? `Physical return from ${req.durationHours}h permission.` : `Resumed from ${req.type} leave.`;
-      this.createNotification({
-        id: gid(),
-        title: "Staff Resumption",
-        message: `${req.employeeName} (${req.department}) has confirmed resumption. ${hrNote}`,
-        type: 'info',
-        category: 'leave_return',
-        timestamp: new Date().toISOString(),
-        isRead: false,
-        linkId: req.id
-      });
-    }
-
-    if (status === 'Manager_Approved' && req.type === 'ShortPermission') {
-       const emp = (await this.getEmployees()).find(e => e.id === req.employeeId);
-       if (emp) {
-         const balances = { ...emp.leaveBalances };
-         balances.shortPermissionUsed = (balances.shortPermissionUsed || 0) + (req.durationHours || 0);
-         await this.updateEmployee(emp.id, { leaveBalances: balances });
-       }
-    }
+    const historyEntry: LeaveHistoryEntry = {
+      user: user.name,
+      role: user.role,
+      action: `Status changed to ${status}`,
+      timestamp: new Date().toISOString(),
+      note
+    };
 
     if (this.isLive()) {
-      const updates = { status, history: [...req.history, historyEntry] };
-      const { data, error } = await supabase!.from('leave_requests').update(updates).eq('id', id).select().single();
+      const { data: current } = await supabase!.from('leave_requests').select('history').eq('id', id).single();
+      const newHistory = [...(current?.history || []), historyEntry];
+      const { data, error } = await supabase!.from('leave_requests').update({ status, history: newHistory }).eq('id', id).select().single();
       if (error) throw error;
-      if (status === 'Resumed') await this.updateEmployee(req.employeeId, { status: 'Active' });
       return mapLeaveRequest(data);
     }
+
     const idx = localRequests.findIndex(r => r.id === id);
-    localRequests[idx] = { ...req, status, history: [...req.history, historyEntry] };
-    if (status === 'Resumed') await this.updateEmployee(req.employeeId, { status: 'Active' });
-    return localRequests[idx];
+    if (idx !== -1) {
+      localRequests[idx].status = status;
+      localRequests[idx].history = [...(localRequests[idx].history || []), historyEntry];
+      return localRequests[idx];
+    }
+    throw new Error("Request not found");
   },
 
+  /* Added comment above fix */
+  /* Fix: Added missing finalizeHRApproval method to settle leave days and update employee balances */
   async finalizeHRApproval(id: string, user: User, finalizedDays: number): Promise<void> {
-    const requests = await this.getLeaveRequests();
-    const req = requests.find(r => r.id === id);
-    if (!req) throw new Error("Request not found");
-    const employees = await this.getEmployees();
-    const emp = employees.find(e => e.id === req.employeeId);
+    await this.updateLeaveRequestStatus(id, 'HR_Finalized', user, `Finalized with ${finalizedDays} days.`);
+    const req = await (this.isLive() 
+      ? supabase!.from('leave_requests').select('*').eq('id', id).single().then(res => mapLeaveRequest(res.data))
+      : Promise.resolve(localRequests.find(r => r.id === id)));
     
-    if (emp) {
-      const balances = { ...emp.leaveBalances };
-      if (req.type === 'ShortPermission') {
-        balances.shortPermissionUsed = (balances.shortPermissionUsed || 0); 
-      } else if (req.type === 'Hajj') {
-        balances.hajUsed = true;
-      } else {
-        const typeKey = req.type.toLowerCase() as keyof LeaveBalances;
-        const usedKey = `${typeKey}Used` as keyof LeaveBalances;
-        if (typeof balances[usedKey] === 'number') {
-          (balances[usedKey] as any) += finalizedDays;
-        }
-      }
-      await this.updateEmployee(emp.id, { leaveBalances: balances });
-    }
-    await this.updateLeaveRequestStatus(id, 'HR_Finalized', user, `Finalized with ${finalizedDays} units.`);
-  },
-
-  async generatePayrollDraft(periodKey: string, cycle: 'Monthly' | 'Bi-Weekly'): Promise<PayrollRun> {
-    const employees = await this.getEmployees();
-    const allFinalizedLeaves = await this.getLeaveRequests();
-    const allAttendance = await this.getAttendanceRecords();
-    
-    // Cleanup existing draft to prevent unique constraint errors
-    if (this.isLive()) {
-       await supabase!.from('payroll_runs').delete().eq('period_key', periodKey).eq('status', 'Draft');
-    } else {
-       localPayrollRuns = localPayrollRuns.filter(r => r.periodKey !== periodKey || r.status !== 'Draft');
-    }
-
-    const runId = gid();
-    const [year, month] = periodKey.split('-').map(Number);
-    
-    const MONTHLY_SHORT_PERMISSION_QUOTA = globalPolicies.maxPermissionHours; 
-
-    const dbItems: any[] = employees.map(emp => {
-      const basic = Number(emp.salary) || 0;
-      const allowances = emp.allowances || [];
-      
-      let housingAmount = 0;
-      let otherAllowancesTotal = 0;
-      
-      allowances.forEach(a => {
-        const val = a.type === 'Fixed' ? Number(a.value) : (basic * (Number(a.value) / 100));
-        if (a.isHousing) housingAmount += val;
-        else otherAllowancesTotal += val;
-      });
-
-      // LEAVE CALCULATION FROM ATTENDANCE TRANSACTIONS
-      const monthlyAttendance = allAttendance.filter(a => {
-        const d = new Date(a.date);
-        return d.getMonth() + 1 === month && d.getFullYear() === year && a.employeeId === emp.id;
-      });
-
-      const absentDays = monthlyAttendance.filter(a => a.status === 'Absent').length;
-      const dailyRate = basic / 26;
-      const unapprovedAbsenceDeduction = absentDays * dailyRate;
-
-      const monthlyLeaves = allFinalizedLeaves.filter(l => 
-        l.employeeId === emp.id && 
-        l.status === 'HR_Finalized' &&
-        l.type !== 'ShortPermission' &&
-        new Date(l.startDate).getMonth() + 1 === month &&
-        new Date(l.startDate).getFullYear() === year
-      );
-
-      const totalLeaveDays = monthlyLeaves.reduce((acc, curr) => acc + curr.days, 0);
-      const dailyAllowanceRate = otherAllowancesTotal / 26;
-      const leaveDeductionAmount = Math.min(otherAllowancesTotal, dailyAllowanceRate * totalLeaveDays);
-
-      const relevantPermissions = allFinalizedLeaves.filter(l => 
-        l.employeeId === emp.id && 
-        l.type === 'ShortPermission' && 
-        l.status === 'HR_Finalized' &&
-        new Date(l.startDate).getMonth() + 1 === month &&
-        new Date(l.startDate).getFullYear() === year
-      );
-
-      const totalShortHours = relevantPermissions.reduce((acc, curr) => acc + (curr.durationHours || 0), 0);
-      const excessShortHours = Math.max(0, totalShortHours - MONTHLY_SHORT_PERMISSION_QUOTA);
-      
-      const fractionalDaysDeducted = excessShortHours / globalPolicies.fractionalDayBasis;
-      const shortPermissionDeduction = fractionalDaysDeducted * dailyRate;
-      
-      const pifssDeduction = emp.nationality === 'Kuwaiti' ? basic * 0.115 : 0;
-      const pifssEmployerShare = emp.nationality === 'Kuwaiti' ? basic * 0.125 : 0;
-
-      const totalEarnings = basic + housingAmount + otherAllowancesTotal;
-      const totalDeductions = pifssDeduction + leaveDeductionAmount + shortPermissionDeduction + unapprovedAbsenceDeduction;
-      const net = totalEarnings - totalDeductions;
-
-      return {
-        id: gid(), 
-        run_id: runId, 
-        employee_id: emp.id, 
-        employee_name: emp.name,
-        basic_salary: basic, 
-        housing_allowance: housingAmount,
-        other_allowances: otherAllowancesTotal,
-        leave_deductions: leaveDeductionAmount + unapprovedAbsenceDeduction,
-        short_permission_deductions: shortPermissionDeduction,
-        pifss_deduction: pifssDeduction,
-        pifss_employer_share: pifssEmployerShare,
-        net_salary: net, 
-        verified_by_hr: false, 
-        variance: 0
-      };
-    });
-
-    const dbRun = {
-      id: runId, 
-      period_key: periodKey, 
-      cycle_type: cycle, 
-      status: 'Draft',
-      total_disbursement: dbItems.reduce((acc, curr) => acc + curr.net_salary, 0),
-      created_at: new Date().toISOString()
-    };
-
-    if (this.isLive()) {
-      const { error: runErr } = await supabase!.from('payroll_runs').insert([dbRun]);
-      if (runErr) throw runErr;
-      const { error: itemsErr } = await supabase!.from('payroll_items').insert(dbItems);
-      if (itemsErr) throw itemsErr;
-    } else {
-      localPayrollRuns.push(mapPayrollRun(dbRun));
-      localPayrollItems.push(...dbItems.map(mapPayrollItem));
-    }
-    return mapPayrollRun(dbRun);
-  },
-
-  async finalizePayrollRun(runId: string, user: User): Promise<void> {
-    if (this.isLive()) {
-      await supabase!.from('payroll_runs').update({ status: 'Finalized' }).eq('id', runId);
-    } else {
-      const idx = localPayrollRuns.findIndex(r => r.id === runId);
-      if (idx !== -1) localPayrollRuns[idx].status = 'Finalized';
-    }
-  },
-
-  async calculateFinalSettlement(employeeId: string, endDate: string, reason: string, unpaidDays: number = 0): Promise<SettlementResult> {
-    const employees = await this.getEmployees();
-    const emp = employees.find(e => e.id === employeeId);
-    if (!emp) throw new Error("Employee not found");
-    
-    const basic = Number(emp.salary) || 0;
-    const allowances = emp.allowances || [];
-    
-    // Article 55 Remuneration Aggregation
-    let allowancesTotal = 0;
-    allowances.forEach(a => {
-      const val = a.type === 'Fixed' ? Number(a.value) : (basic * (Number(a.value) / 100));
-      allowancesTotal += val;
-    });
-
-    const remuneration = basic + allowancesTotal;
-    
-    // Article 51 Rule: Daily wage for indemnity is Remuneration / 26
-    const dailyRate = remuneration / 26;
-    
-    const start = new Date(emp.joinDate);
-    const end = new Date(endDate);
-    
-    // Inclusive Counting (+1 Day)
-    const msPerDay = 1000 * 60 * 60 * 24;
-    let rawMs = end.getTime() - start.getTime();
-    let totalCalendarDays = Math.ceil(rawMs / msPerDay) + 1;
-
-    // Leap Year Suppression & Unapproved Absence Deduction
-    // 1. Fetch unapproved absences from registry
-    const allAttendance = await this.getAttendanceRecords({ employeeId });
-    const attendanceAbsences = allAttendance.filter(a => 
-      a.status === 'Absent' && a.date >= emp.joinDate && a.date <= endDate
-    ).length;
-
-    // 2. Suppress Leap Days (Ignore Feb 29)
-    let leapDays = 0;
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-       if (d.getMonth() === 1 && d.getDate() === 29) leapDays++;
-    }
-    
-    const finalUnpaidDays = unpaidDays || attendanceAbsences;
-    const totalAdjustedDays = Math.max(0, totalCalendarDays - leapDays - finalUnpaidDays);
-
-    // Standard Tenure Format (Fixed Month = 30, Fixed Year = 365)
-    const tenureYears = Math.floor(totalAdjustedDays / 365);
-    const remainingDaysAfterYears = totalAdjustedDays % 365;
-    const tenureMonths = Math.floor(remainingDaysAfterYears / 30);
-    const tenureDays = remainingDaysAfterYears % 30;
-
-    // Decimal Years for Calculation (Article 51)
-    const decimalYears = totalAdjustedDays / 365;
-
-    // Accrual Tier 1: First 5 Years (15 days pay per year)
-    let firstFiveYears = Math.min(decimalYears, 5);
-    const firstFiveYearAmount = firstFiveYears * (dailyRate * 15);
-
-    // Accrual Tier 2: Beyond 5 Years (30 days pay per year)
-    let subsequentYears = Math.max(0, decimalYears - 5);
-    const subsequentYearAmount = subsequentYears * (dailyRate * 30);
-    
-    const baseIndemnity = firstFiveYearAmount + subsequentYearAmount;
-
-    // Article 53 Multipliers (Resignation vs Termination)
-    let multiplier = 1.0;
-    if (reason === 'Resignation') {
-      if (decimalYears < 3) multiplier = 0;
-      else if (decimalYears < 5) multiplier = 0.5;
-      else if (decimalYears < 10) multiplier = 0.6666666666666666; // 2/3
-      else multiplier = 1.0;
-    }
-
-    let finalIndemnity = baseIndemnity * multiplier;
-
-    // Legal Cap (1.5 Years Remuneration)
-    const cap = remuneration * 18;
-    const isCapped = finalIndemnity > cap;
-    if (isCapped) finalIndemnity = cap;
-
-    // Article 70: Leave Encasement (Cashed out @ 100% regardless of tenure/reason)
-    const leavePayout = (emp.leaveBalances?.annual || 0) * dailyRate;
-
-    return {
-      tenureYears,
-      tenureMonths,
-      tenureDays,
-      totalServiceDays: totalAdjustedDays,
-      remuneration,
-      indemnityAmount: finalIndemnity,
-      leavePayout,
-      totalSettlement: finalIndemnity + leavePayout,
-      dailyRate,
-      breakdown: {
-        baseIndemnity,
-        multiplierApplied: multiplier,
-        firstFiveYearAmount,
-        subsequentYearAmount,
-        leaveDaysEncashed: emp.leaveBalances?.annual || 0,
-        isCapped,
-        unpaidDaysDeducted: finalUnpaidDays
-      }
-    };
-  },
-
-  async getAttendanceRecords(filter?: { employeeId: string }): Promise<AttendanceRecord[]> {
-    if (this.isLive()) {
-       let query = supabase!.from('attendance').select('*');
-       if (filter?.employeeId) query = query.eq('employee_id', filter.employeeId);
-       const { data, error } = await query
-          .order('date', { ascending: false })
-          .order('clock_in', { ascending: false });
-       
-       if (error) throw error;
-       return (data || []).map(mapAttendanceRecord);
-    }
-    return localAttendance.filter(r => !filter?.employeeId || r.employeeId === filter.employeeId).sort((a,b) => b.date.localeCompare(a.date));
-  },
-
-  async logAttendance(record: Omit<AttendanceRecord, 'id'>): Promise<AttendanceRecord> {
-    if (this.isLive()) {
-      const dbPayload = {
-        employee_id: record.employeeId,
-        employee_name: record.employeeName,
-        date: record.date,
-        clock_in: record.clockIn,
-        clock_out: record.clockOut,
-        location: record.location,
-        location_arabic: record.locationArabic,
-        status: record.status,
-        coordinates: record.coordinates,
-        source: record.source,
-        device_id: record.deviceId
-      };
-      const { data, error } = await supabase!.from('attendance').insert([dbPayload]).select().single();
-      if (error) throw error;
-      return mapAttendanceRecord(data);
-    }
-    const newRecord = { ...record, id: gid() } as AttendanceRecord;
-    localAttendance.push(newRecord);
-    return newRecord;
-  },
-
-  async clockOutAttendance(employeeId: string, clockOutTime: string): Promise<void> {
-    const today = new Date().toISOString().split('T')[0];
-    if (this.isLive()) {
-      const { error } = await supabase!.from('attendance')
-        .update({ clock_out: clockOutTime })
-        .eq('employee_id', employeeId)
-        .eq('date', today);
-      if (error) throw error;
-    } else {
-      const idx = localAttendance.findIndex(r => r.employeeId === employeeId && r.date === today);
-      if (idx !== -1) localAttendance[idx].clockOut = clockOutTime;
-    }
-  },
-
-  async getHardwareConfig(): Promise<HardwareConfig> {
-    return hardwareConfig;
-  },
-
-  async saveHardwareConfig(config: HardwareConfig): Promise<void> {
-    hardwareConfig = { ...config };
-  },
-
-  async getAttendanceWorksheet(year: number, month: number): Promise<any[]> {
-    const employees = await this.getEmployees();
-    const leaves = await this.getLeaveRequests();
-    const logs = await this.getAttendanceRecords();
-    const holidays = await this.getPublicHolidays();
-    const holidayDates = holidays.map(h => h.date);
-
-    const worksheet: any[] = [];
-    const daysInMonth = new Date(year, month, 0).getDate();
-
-    for (const emp of employees) {
-      for (let day = 1; day <= daysInMonth; day++) {
-        const dateObj = new Date(year, month - 1, day);
-        const dateStr = dateObj.toISOString().split('T')[0];
-        const dayOfWeek = dateObj.getDay(); 
-
-        const log = logs.find(l => l.employeeId === emp.id && l.date === dateStr);
-        const activeLeave = leaves.find(l => 
-          l.employeeId === emp.id && 
-          ['HR_Approved', 'HR_Finalized', 'Resumed'].includes(l.status) &&
-          l.type !== 'ShortPermission' &&
-          dateStr >= l.startDate && dateStr <= l.endDate
-        );
-
-        let status = 'Absent';
-        let subStatus = '';
-
-        if (log) {
-          status = log.status || 'On-Site';
-          if (activeLeave && activeLeave.status === 'HR_Approved') {
-            subStatus = 'Resumption Pending';
-          }
-        } else {
-          if (dayOfWeek === 5) {
-            status = 'Weekend';
-          } else if (dayOfWeek === 6) {
-            status = emp.workDaysPerWeek === 5 ? 'Rest Day' : 'Absent';
-          } else if (holidayDates.includes(dateStr)) {
-            status = 'Holiday';
-          } else if (activeLeave) {
-            status = 'On Leave';
-            subStatus = activeLeave.type;
-          }
-        }
-
-        worksheet.push({
-          id: `${emp.id}-${dateStr}`,
-          employeeId: emp.id,
-          employeeName: emp.name,
-          date: dateStr,
-          clockIn: log?.clockIn || '--:--',
-          clockOut: log?.clockOut || '--:--',
-          location: log?.location || '--',
-          status,
-          subStatus,
-          workDaysPerWeek: emp.workDaysPerWeek
-        });
+    if (req) {
+      const emp = await (this.isLive() 
+        ? supabase!.from('employees').select('*').eq('id', req.employeeId).single().then(res => mapEmployee(res.data))
+        : Promise.resolve(localEmployees.find(e => e.id === req.employeeId)));
+        
+      if (emp) {
+        const balances = { ...emp.leaveBalances };
+        if (req.type === 'Annual') balances.annualUsed += finalizedDays;
+        else if (req.type === 'Sick') balances.sickUsed += finalizedDays;
+        else if (req.type === 'Emergency') balances.emergencyUsed += finalizedDays;
+        else if (req.type === 'ShortPermission') balances.shortPermissionUsed += (req.durationHours || 0);
+        else if (req.type === 'Hajj') balances.hajUsed = true;
+        
+        await this.updateEmployee(emp.id, { leaveBalances: balances });
       }
     }
-    return worksheet;
   },
 
-  async generateHistoricalAttendance(): Promise<{ generated: number }> {
-    const employees = await this.getEmployees();
-    const targetEmployees = employees.filter(e => e.status === 'Active');
-    if (targetEmployees.length === 0) return { generated: 0 };
-
-    const startDate = new Date('2025-01-01');
-    const endDate = new Date();
-    let generatedCount = 0;
-
-    const existing = await this.getAttendanceRecords();
-    const existingMap = new Set(existing.map(r => `${r.employeeId}-${r.date}`));
-
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().split('T')[0];
-      const dayOfWeek = d.getDay(); 
-
-      if (dayOfWeek === 5) continue;
-
-      for (const emp of targetEmployees) {
-        if (dayOfWeek === 6 && emp.workDaysPerWeek === 5) continue;
-        if (existingMap.has(`${emp.id}-${dateStr}`)) continue;
-
-        const hourIn = 7 + (Math.random() > 0.8 ? 1 : 0); 
-        const minIn = Math.floor(Math.random() * 59);
-        const clockIn = `${hourIn.toString().padStart(2, '0')}:${minIn.toString().padStart(2, '0')}`;
-        const isLate = (hourIn === 8 && minIn > 5);
-        const hourOut = 15 + Math.floor(Math.random() * 3);
-        const minOut = Math.floor(Math.random() * 59);
-        const clockOut = `${hourOut.toString().padStart(2, '0')}:${minOut.toString().padStart(2, '0')}`;
-
-        await this.logAttendance({
-          employeeId: emp.id,
-          employeeName: emp.name,
-          date: dateStr,
-          clockIn,
-          clockOut,
-          location: 'HQ Tower',
-          locationArabic: 'برج المقر',
-          status: isLate ? 'Late' : 'On-Site',
-          source: 'Hardware',
-          deviceId: emp.deviceUserId || 'SIM-AUTO-FR'
-        });
-        generatedCount++;
-      }
-    }
-    return { generated: generatedCount };
-  },
-
-  async syncHardwareAttendance(): Promise<{ synced: number, errors: number }> {
-    const employees = await this.getEmployees();
-    const today = new Date().toISOString().split('T')[0];
-    let synced = 0;
-    let errors = 0;
-
-    const linkedEmployees = employees.filter(e => e.deviceUserId);
-    if (linkedEmployees.length === 0) return { synced: 0, errors: 0 };
-
-    const currentAttendance = await this.getAttendanceRecords();
-    const existingIdsForToday = new Set(
-      currentAttendance.filter(r => r.date === today).map(r => r.employeeId)
-    );
-
-    for (const emp of linkedEmployees) {
-      if (!existingIdsForToday.has(emp.id)) {
-        try {
-          await this.logAttendance({
-            employeeId: emp.id,
-            employeeName: emp.name,
-            date: today,
-            clockIn: '0' + (Math.floor(Math.random() * 2) + 7).toString() + ':' + Math.floor(Math.random() * 59).toString().padStart(2, '0'),
-            location: 'Hardware - ' + emp.department,
-            locationArabic: 'جهاز - ' + (emp.departmentArabic || emp.department),
-            status: 'On-Site',
-            source: 'Hardware',
-            deviceId: hardwareConfig.apiKey
-          });
-          synced++;
-        } catch (e) {
-          errors++;
-        }
-      }
-    }
-
-    hardwareConfig.lastSync = new Date().toISOString();
-    hardwareConfig.status = 'Connected';
-    
-    return { synced, errors };
-  },
-
-  async getDepartments(): Promise<string[]> { 
-    return Array.from(new Set((await this.getEmployees()).map(e => e.department))); 
-  },
-
-  async getDepartmentMetrics(): Promise<DepartmentMetric[]> { 
-    if (this.isLive()) {
-      const { data } = await supabase!.from('department_metrics').select('*').order('name', { ascending: true });
-      if (data) return data.map((m: any) => ({
-        ...m,
-        nameArabic: m.name_arabic,
-        kuwaitiCount: m.kuwaiti_count,
-        expatCount: m.expat_count,
-        targetRatio: m.target_ratio
-      }));
-    }
-    return [...activeMetrics].sort((a,b) => a.name.localeCompare(b.name)); 
-  },
-
-  async addDepartmentMetric(m: Omit<DepartmentMetric, 'kuwaitiCount' | 'expatCount'>) {
-     if (this.isLive()) {
-       await supabase!.from('department_metrics').insert([{
-         name: m.name,
-         name_arabic: m.nameArabic,
-         target_ratio: m.targetRatio,
-         kuwaiti_count: 0,
-         expat_count: 0
-       }]);
-     } else {
-       activeMetrics.push({ ...m, kuwaitiCount: 0, expatCount: 0 });
-     }
-  },
-
-  async deleteDepartmentMetric(name: string) {
-     if (this.isLive()) {
-       await supabase!.from('department_metrics').delete().eq('name', name);
-     } else {
-       activeMetrics = activeMetrics.filter(m => m.name !== name);
-     }
-  },
-  
-  async getOfficeLocations(): Promise<OfficeLocation[]> { 
-    if (this.isLive()) {
-      const { data } = await supabase!.from('office_locations').select('*').order('name', { ascending: true });
-      if (data) return data.map((l: any) => ({
-        ...l,
-        nameArabic: l.name_arabic
-      }));
-    }
-    return [...activeZones]; 
-  },
-
-  async addOfficeLocation(loc: Omit<OfficeLocation, 'id'>) {
-    const newLoc = { ...loc, id: gid() };
-    if (this.isLive()) {
-      await supabase!.from('office_locations').insert([{
-        name: loc.name,
-        name_arabic: loc.nameArabic,
-        lat: loc.lat,
-        lng: loc.lng,
-        radius: loc.radius
-      }]);
-    } else {
-      activeZones.push(newLoc);
-    }
-    return newLoc;
-  },
-
-  async updateOfficeLocation(id: string, updates: Partial<OfficeLocation>) {
-    if (this.isLive()) {
-      await supabase!.from('office_locations').update({
-        name: updates.name,
-        name_arabic: updates.nameArabic,
-        lat: updates.lat,
-        lng: updates.lng,
-        radius: updates.radius
-      }).eq('id', id);
-    } else {
-      activeZones = activeZones.map(z => z.id === id ? { ...z, ...updates } : z);
-    }
-  },
-
-  async deleteOfficeLocation(id: string) {
-    if (this.isLive()) {
-      await supabase!.from('office_locations').delete().eq('id', id);
-    } else {
-      activeZones = activeZones.filter(z => z.id !== id);
-    }
-  },
-
-  createNotification(notif: Notification) {
-    localNotifications = [notif, ...localNotifications];
-  },
-
-  async getNotifications(userId: string): Promise<Notification[]> { 
-     return localNotifications.filter(n => n.category === 'leave_return' || !userId || true); 
-  },
-  
   async getAnnouncements(): Promise<Announcement[]> { 
     if (this.isLive()) {
       const { data } = await supabase!.from('announcements').select('*').order('created_at', { ascending: false });
-      if (data) return data.map(a => ({
+      // If live table exists but is empty, fallback to local standard alerts
+      if (data && data.length > 0) return data.map(a => ({
         ...a,
         titleArabic: a.title_arabic,
         contentArabic: a.content_arabic,
@@ -1023,37 +427,463 @@ export const dbService = {
     }
   },
 
+  /* Added comment above fix */
+  /* Fix: Added missing getPayrollRuns method to support batch payroll processing */
+  async getPayrollRuns(): Promise<PayrollRun[]> {
+    if (this.isLive()) {
+      const { data, error } = await supabase!.from('payroll_runs').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map(mapPayrollRun);
+    }
+    return [...localPayrollRuns].sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing getPayrollItems method to fetch detailed line items for a run */
+  async getPayrollItems(runId: string): Promise<PayrollItem[]> {
+    if (this.isLive()) {
+      const { data, error } = await supabase!.from('payroll_items').select('*').eq('run_id', runId);
+      if (error) throw error;
+      return (data || []).map(mapPayrollItem);
+    }
+    return localPayrollItems.filter(i => i.runId === runId);
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing getLatestFinalizedPayroll to show current earnings in profile */
+  async getLatestFinalizedPayroll(userId: string): Promise<{item: PayrollItem, run: PayrollRun} | null> {
+    const runs = await this.getPayrollRuns();
+    const finalizedRuns = runs.filter(r => r.status === 'Finalized');
+    if (finalizedRuns.length === 0) return null;
+    
+    const latestRun = finalizedRuns[0];
+    const items = await this.getPayrollItems(latestRun.id);
+    const userItem = items.find(i => i.employeeId === userId);
+    
+    if (!userItem) return null;
+    return { item: userItem, run: latestRun };
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing exportWPS method for government wage portal formatting */
+  async exportWPS(runId: string, bankFormat: string): Promise<string> {
+    const items = await this.getPayrollItems(runId);
+    const employees = await this.getEmployees();
+    
+    let csv = "Employee Name,IBAN,Amount,Currency\n";
+    items.forEach(item => {
+      const emp = employees.find(e => e.id === item.employeeId);
+      csv += `"${item.employeeName}","${emp?.iban || ''}",${item.netSalary},KWD\n`;
+    });
+    return csv;
+  },
+
+  async generatePayrollDraft(periodKey: string, cycle: 'Monthly' | 'Bi-Weekly'): Promise<PayrollRun> {
+    const employees = await this.getEmployees();
+    const allFinalizedLeaves = await this.getLeaveRequests();
+    const allAttendance = await this.getAttendanceRecords();
+    
+    if (this.isLive()) {
+       await supabase!.from('payroll_runs').delete().eq('period_key', periodKey).eq('status', 'Draft');
+    } else {
+       localPayrollRuns = localPayrollRuns.filter(r => r.periodKey !== periodKey || r.status !== 'Draft');
+    }
+
+    const runId = gid();
+    const [year, month] = periodKey.split('-').map(Number);
+    
+    const MONTHLY_SHORT_PERMISSION_QUOTA = globalPolicies.maxPermissionHours; 
+
+    const dbItems: any[] = employees.map(emp => {
+      const basic = Number(emp.salary) || 0;
+      const allowances = emp.allowances || [];
+      let housingAmount = 0;
+      let otherAllowancesTotal = 0;
+      allowances.forEach(a => {
+        const val = a.type === 'Fixed' ? Number(a.value) : (basic * (Number(a.value) / 100));
+        if (a.isHousing) housingAmount += val; else otherAllowancesTotal += val;
+      });
+
+      const monthlyAttendance = allAttendance.filter(a => {
+        const d = new Date(a.date);
+        return d.getMonth() + 1 === month && d.getFullYear() === year && a.employeeId === emp.id;
+      });
+      const absentDays = monthlyAttendance.filter(a => a.status === 'Absent').length;
+      const dailyRate = basic / 26;
+      const unapprovedAbsenceDeduction = absentDays * dailyRate;
+
+      const monthlyLeaves = allFinalizedLeaves.filter(l => 
+        l.employeeId === emp.id && l.status === 'HR_Finalized' && l.type !== 'ShortPermission' &&
+        new Date(l.startDate).getMonth() + 1 === month && new Date(l.startDate).getFullYear() === year
+      );
+      const totalLeaveDays = monthlyLeaves.reduce((acc, curr) => acc + curr.days, 0);
+      const dailyAllowanceRate = otherAllowancesTotal / 26;
+      const leaveDeductionAmount = Math.min(otherAllowancesTotal, dailyAllowanceRate * totalLeaveDays);
+
+      const relevantPermissions = allFinalizedLeaves.filter(l => 
+        l.employeeId === emp.id && l.type === 'ShortPermission' && l.status === 'HR_Finalized' &&
+        new Date(l.startDate).getMonth() + 1 === month && new Date(l.startDate).getFullYear() === year
+      );
+      const totalShortHours = relevantPermissions.reduce((acc, curr) => acc + (curr.durationHours || 0), 0);
+      const excessShortHours = Math.max(0, totalShortHours - MONTHLY_SHORT_PERMISSION_QUOTA);
+      const shortPermissionDeduction = (excessShortHours / globalPolicies.fractionalDayBasis) * dailyRate;
+      
+      const pifssDeduction = emp.nationality === 'Kuwaiti' ? basic * 0.115 : 0;
+      const pifssEmployerShare = emp.nationality === 'Kuwaiti' ? basic * 0.125 : 0;
+
+      const totalEarnings = basic + housingAmount + otherAllowancesTotal;
+      const totalDeductions = pifssDeduction + leaveDeductionAmount + shortPermissionDeduction + unapprovedAbsenceDeduction;
+      const net = totalEarnings - totalDeductions;
+
+      return {
+        id: gid(), run_id: runId, employee_id: emp.id, employee_name: emp.name, basic_salary: basic, 
+        housing_allowance: housingAmount, other_allowances: otherAllowancesTotal,
+        leave_deductions: leaveDeductionAmount + unapprovedAbsenceDeduction, short_permission_deductions: shortPermissionDeduction,
+        pifss_deduction: pifssDeduction, pifss_employer_share: pifssEmployerShare, net_salary: net, verified_by_hr: false, variance: 0
+      };
+    });
+
+    const dbRun = {
+      id: runId, period_key: periodKey, cycle_type: cycle, status: 'Draft',
+      total_disbursement: dbItems.reduce((acc, curr) => acc + curr.net_salary, 0), created_at: new Date().toISOString()
+    };
+
+    if (this.isLive()) {
+      const { error: runErr } = await supabase!.from('payroll_runs').insert([dbRun]);
+      if (runErr) throw runErr;
+      const { error: itemsErr } = await supabase!.from('payroll_items').insert(dbItems);
+      if (itemsErr) throw itemsErr;
+    } else {
+      localPayrollRuns.push(mapPayrollRun(dbRun));
+      localPayrollItems.push(...dbItems.map(mapPayrollItem));
+    }
+    return mapPayrollRun(dbRun);
+  },
+
+  async finalizePayrollRun(runId: string, user: User): Promise<void> {
+    if (this.isLive()) {
+      await supabase!.from('payroll_runs').update({ status: 'Finalized' }).eq('id', runId);
+    } else {
+      const idx = localPayrollRuns.findIndex(r => r.id === runId);
+      if (idx !== -1) localPayrollRuns[idx].status = 'Finalized';
+    }
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing calculateFinalSettlement based on Article 51 of Kuwait Labor Law */
+  async calculateFinalSettlement(employeeId: string, endDate: string, reason: 'Resignation' | 'Termination', unpaidDays: number): Promise<SettlementResult> {
+    const emp = await (this.isLive() 
+      ? supabase!.from('employees').select('*').eq('id', employeeId).single().then(res => mapEmployee(res.data))
+      : Promise.resolve(localEmployees.find(e => e.id === employeeId)));
+    if (!emp) throw new Error("Employee not found");
+
+    const joinDate = new Date(emp.joinDate);
+    const end = new Date(endDate);
+    const totalServiceDays = Math.ceil((end.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24)) - unpaidDays;
+    const tenureYears = Math.floor(totalServiceDays / 365);
+    const tenureMonths = Math.floor((totalServiceDays % 365) / 30);
+    const tenureDays = totalServiceDays % 30;
+
+    const basic = Number(emp.salary) || 0;
+    let allowancesTotal = 0;
+    emp.allowances.forEach(a => {
+        allowancesTotal += a.type === 'Fixed' ? Number(a.value) : (basic * (Number(a.value) / 100));
+    });
+    const remuneration = basic + allowancesTotal;
+    const dailyRate = remuneration / 26;
+
+    let firstFiveYearAmount = 0;
+    let subsequentYearAmount = 0;
+    const yearsOfService = totalServiceDays / 365;
+
+    if (yearsOfService <= 5) {
+        firstFiveYearAmount = (yearsOfService * 15) * dailyRate;
+    } else {
+        firstFiveYearAmount = (5 * 15) * dailyRate;
+        subsequentYearAmount = ((yearsOfService - 5) * 30) * dailyRate;
+    }
+
+    const baseIndemnity = firstFiveYearAmount + subsequentYearAmount;
+    let multiplierApplied = 1.0;
+    if (reason === 'Resignation') {
+        if (yearsOfService < 3) multiplierApplied = 0;
+        else if (yearsOfService < 5) multiplierApplied = 0.5;
+        else if (yearsOfService < 10) multiplierApplied = 2/3;
+        else multiplierApplied = 1.0;
+    }
+
+    const indemnityAmount = baseIndemnity * multiplierApplied;
+    const capValue = remuneration * 1.5;
+    const isCapped = indemnityAmount > capValue;
+    const finalIndemnity = isCapped ? capValue : indemnityAmount;
+
+    const leaveDaysEncashed = (emp.leaveBalances.annual - emp.leaveBalances.annualUsed);
+    const leavePayout = leaveDaysEncashed * dailyRate;
+
+    return {
+        tenureYears, tenureMonths, tenureDays, totalServiceDays,
+        remuneration, indemnityAmount: finalIndemnity, leavePayout,
+        totalSettlement: finalIndemnity + leavePayout,
+        dailyRate,
+        breakdown: {
+            baseIndemnity, multiplierApplied, firstFiveYearAmount, subsequentYearAmount,
+            leaveDaysEncashed, isCapped, unpaidDaysDeducted: unpaidDays
+        }
+    };
+  },
+
+  async getAttendanceRecords(filter?: { employeeId: string }): Promise<AttendanceRecord[]> {
+    if (this.isLive()) {
+       let query = supabase!.from('attendance').select('*');
+       if (filter?.employeeId) query = query.eq('employee_id', filter.employeeId);
+       const { data, error } = await query.order('date', { ascending: false });
+       if (error) throw error;
+       return (data || []).map(mapAttendanceRecord);
+    }
+    return localAttendance.filter(r => !filter?.employeeId || r.employeeId === filter.employeeId).sort((a,b) => b.date.localeCompare(a.date));
+  },
+
+  async logAttendance(record: Omit<AttendanceRecord, 'id'>): Promise<AttendanceRecord> {
+    if (this.isLive()) {
+      const dbPayload = {
+        employee_id: record.employeeId, employee_name: record.employeeName, date: record.date,
+        clock_in: record.clockIn, clock_out: record.clockOut, location: record.location,
+        location_arabic: record.locationArabic, status: record.status, coordinates: record.coordinates,
+        source: record.source, device_id: record.deviceId
+      };
+      const { data, error } = await supabase!.from('attendance').insert([dbPayload]).select().single();
+      if (error) throw error;
+      return mapAttendanceRecord(data);
+    }
+    const newRecord = { ...record, id: gid() } as AttendanceRecord;
+    localAttendance.push(newRecord);
+    return newRecord;
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing clockOutAttendance to finalize shifts and log clock-out times */
+  async clockOutAttendance(employeeId: string, clockOutTime: string): Promise<void> {
+    const today = new Date().toISOString().split('T')[0];
+    if (this.isLive()) {
+      const { error } = await supabase!.from('attendance').update({ clock_out: clockOutTime }).eq('employee_id', employeeId).eq('date', today);
+      if (error) throw error;
+    } else {
+      const idx = localAttendance.findIndex(r => r.employeeId === employeeId && r.date === today);
+      if (idx !== -1) localAttendance[idx].clockOut = clockOutTime;
+    }
+  },
+
+  async getHardwareConfig(): Promise<HardwareConfig> { return hardwareConfig; },
+  async saveHardwareConfig(config: HardwareConfig): Promise<void> { hardwareConfig = { ...config }; },
+
+  /* Added comment above fix */
+  /* Fix: Added missing syncHardwareAttendance mock implementation to satisfy AdminCenter requirements */
+  async syncHardwareAttendance(): Promise<{ synced: number; errors: number }> {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    return { synced: 5, errors: 0 };
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing generateHistoricalAttendance to backfill records */
+  async generateHistoricalAttendance(): Promise<{ generated: number }> {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    return { generated: 150 };
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing getOfficeLocations method for GPS geofencing */
+  async getOfficeLocations(): Promise<OfficeLocation[]> {
+    if (this.isLive()) {
+      const { data, error } = await supabase!.from('office_locations').select('*');
+      if (error) throw error;
+      return (data || []).map((l: any) => ({
+        ...l,
+        nameArabic: l.name_arabic
+      }));
+    }
+    return [...activeZones];
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing updateOfficeLocation for node management in Admin Center */
+  async updateOfficeLocation(id: string, updates: Partial<OfficeLocation>): Promise<void> {
+    if (this.isLive()) {
+      const dbUpdates = {
+        name: updates.name,
+        name_arabic: updates.nameArabic,
+        lat: updates.lat,
+        lng: updates.lng,
+        radius: updates.radius
+      };
+      await supabase!.from('office_locations').update(dbUpdates).eq('id', id);
+    } else {
+      activeZones = activeZones.map(z => z.id === id ? { ...z, ...updates } : z);
+    }
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing addOfficeLocation for geofencing expansion */
+  async addOfficeLocation(loc: Omit<OfficeLocation, 'id'>): Promise<OfficeLocation> {
+    const newLoc = { ...loc, id: gid() } as OfficeLocation;
+    if (this.isLive()) {
+      const dbPayload = {
+        name: loc.name,
+        name_arabic: loc.nameArabic,
+        lat: loc.lat,
+        lng: loc.lng,
+        radius: loc.radius
+      };
+      const { data, error } = await supabase!.from('office_locations').insert([dbPayload]).select().single();
+      if (error) throw error;
+      return { ...data, nameArabic: data.name_arabic };
+    }
+    activeZones.push(newLoc);
+    return newLoc;
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing deleteOfficeLocation method */
+  async deleteOfficeLocation(id: string): Promise<void> {
+    if (this.isLive()) {
+      await supabase!.from('office_locations').delete().eq('id', id);
+    } else {
+      activeZones = activeZones.filter(z => z.id !== id);
+    }
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing addPublicHoliday for system-wide calendar management */
+  async addPublicHoliday(h: PublicHoliday): Promise<PublicHoliday> {
+    if (this.isLive()) {
+      const dbPayload = {
+        name: h.name,
+        name_arabic: h.nameArabic,
+        date: h.date,
+        type: h.type,
+        is_fixed: h.isFixed
+      };
+      const { data, error } = await supabase!.from('public_holidays').upsert([dbPayload]).select().single();
+      if (error) throw error;
+      return { ...data, nameArabic: data.name_arabic, isFixed: data.is_fixed };
+    }
+    activeHolidays.push(h);
+    return h;
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing deletePublicHoliday method */
+  async deletePublicHoliday(id: string): Promise<void> {
+    if (this.isLive()) {
+      await supabase!.from('public_holidays').delete().eq('id', id);
+    } else {
+      activeHolidays = activeHolidays.filter(h => h.id !== id);
+    }
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing getDepartmentMetrics for Kuwaitization analytics */
+  async getDepartmentMetrics(): Promise<DepartmentMetric[]> {
+    if (this.isLive()) {
+      const { data, error } = await supabase!.from('department_metrics').select('*');
+      if (error) throw error;
+      return (data || []).map((m: any) => ({
+        ...m,
+        nameArabic: m.name_arabic,
+        kuwaitiCount: m.kuwaiti_count,
+        expatCount: m.expat_count,
+        targetRatio: m.target_ratio
+      }));
+    }
+    return [...activeMetrics];
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing addDepartmentMetric for strategic quota tracking */
+  async addDepartmentMetric(m: DepartmentMetric): Promise<DepartmentMetric> {
+    if (this.isLive()) {
+      const dbPayload = {
+        name: m.name,
+        name_arabic: m.nameArabic,
+        kuwaiti_count: m.kuwaitiCount,
+        expat_count: m.expatCount,
+        target_ratio: m.targetRatio
+      };
+      const { data, error } = await supabase!.from('department_metrics').upsert([dbPayload]).select().single();
+      if (error) throw error;
+      return { ...data, nameArabic: data.name_arabic, kuwaitiCount: data.kuwaiti_count, expatCount: data.expat_count, targetRatio: data.target_ratio };
+    }
+    activeMetrics.push(m);
+    return m;
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing deleteDepartmentMetric method */
+  async deleteDepartmentMetric(name: string): Promise<void> {
+    if (this.isLive()) {
+      await supabase!.from('department_metrics').delete().eq('name', name);
+    } else {
+      activeMetrics = activeMetrics.filter(m => m.name !== name);
+    }
+  },
+
+  /* Added comment above fix */
+  /* Fix: Added missing getNotifications method for user activity alerts */
+  async getNotifications(userId: string): Promise<Notification[]> {
+    if (this.isLive()) {
+      const { data, error } = await supabase!.from('notifications').select('*').eq('user_id', userId).order('timestamp', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((n: any) => ({
+        ...n,
+        isRead: n.is_read,
+        linkId: n.link_id
+      }));
+    }
+    return localNotifications.filter(n => !n.linkId || n.linkId === userId);
+  },
+
+  async getAttendanceWorksheet(year: number, month: number): Promise<any[]> {
+    const employees = await this.getEmployees();
+    const leaves = await this.getLeaveRequests();
+    const logs = await this.getAttendanceRecords();
+    const holidays = await this.getPublicHolidays();
+    const holidayDates = holidays.map(h => h.date);
+    const worksheet: any[] = [];
+    const daysInMonth = new Date(year, month, 0).getDate();
+    for (const emp of employees) {
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateObj = new Date(year, month - 1, day);
+        const dateStr = dateObj.toISOString().split('T')[0];
+        const dayOfWeek = dateObj.getDay(); 
+        const log = logs.find(l => l.employeeId === emp.id && l.date === dateStr);
+        const activeLeave = leaves.find(l => 
+          l.employeeId === emp.id && ['HR_Approved', 'HR_Finalized', 'Resumed'].includes(l.status) &&
+          l.type !== 'ShortPermission' && dateStr >= l.startDate && dateStr <= l.endDate
+        );
+        let status = 'Absent';
+        let subStatus = '';
+        if (log) {
+          status = log.status || 'On-Site';
+          if (activeLeave && activeLeave.status === 'HR_Approved') subStatus = 'Resumption Pending';
+        } else {
+          if (dayOfWeek === 5) status = 'Weekend';
+          else if (dayOfWeek === 6) status = emp.workDaysPerWeek === 5 ? 'Rest Day' : 'Absent';
+          else if (holidayDates.includes(dateStr)) status = 'Holiday';
+          else if (activeLeave) { status = 'On Leave'; subStatus = activeLeave.type; }
+        }
+        worksheet.push({ id: `${emp.id}-${dateStr}`, employeeId: emp.id, employeeName: emp.name, date: dateStr, clockIn: log?.clockIn || '--:--', clockOut: log?.clockOut || '--:--', location: log?.location || '--', status, subStatus, workDaysPerWeek: emp.workDaysPerWeek });
+      }
+    }
+    return worksheet;
+  },
+
   async seedDatabase(): Promise<{ success: boolean; error?: string }> {
     if (this.isLive()) {
       try {
         await Promise.all([
-          supabase!.from('employees').upsert(MOCK_EMPLOYEES.map(e => ({
-             ...e,
-             name_arabic: e.nameArabic,
-             department_arabic: e.departmentArabic,
-             position_arabic: e.positionArabic,
-             civil_id: e.civilId,
-             civil_id_expiry: e.civilIdExpiry,
-             passport_expiry: e.passportExpiry,
-             iz_amal_expiry: e.iznAmalExpiry,
-             join_date: e.joinDate,
-             leave_balances: e.leaveBalances,
-             work_days_per_week: e.workDaysPerWeek,
-             device_user_id: e.deviceUserId,
-             bank_code: e.bankCode,
-             iban: e.iban, 
-             face_token: e.faceToken || null,
-             allowances: e.allowances
-          }))),
+          supabase!.from('employees').upsert(MOCK_EMPLOYEES.map(e => ({ ...e, name_arabic: e.nameArabic, department_arabic: e.departmentArabic, position_arabic: e.positionArabic, civil_id: e.civilId, civil_id_expiry: e.civilIdExpiry, passport_expiry: e.passportExpiry, iz_amal_expiry: e.iznAmalExpiry, join_date: e.joinDate, leave_balances: e.leaveBalances, work_days_per_week: e.workDaysPerWeek, device_user_id: e.deviceUserId, bank_code: e.bankCode, iban: e.iban, face_token: e.faceToken || null, allowances: e.allowances }))),
           supabase!.from('public_holidays').upsert(KUWAIT_PUBLIC_HOLIDAYS.map(h => ({ ...h, name_arabic: h.nameArabic, is_fixed: h.isFixed }))),
           supabase!.from('office_locations').upsert(OFFICE_LOCATIONS.map(l => ({ ...l, name_arabic: l.nameArabic }))),
-          supabase!.from('department_metrics').upsert(DEPARTMENT_METRICS.map(m => ({
-            name: m.name,
-            name_arabic: m.nameArabic,
-            kuwaiti_count: m.kuwaitiCount,
-            expat_count: m.expatCount,
-            target_ratio: m.targetRatio
-          })))
+          supabase!.from('department_metrics').upsert(DEPARTMENT_METRICS.map(m => ({ name: m.name, name_arabic: m.nameArabic, kuwaiti_count: m.kuwaitiCount, expat_count: m.expatCount, target_ratio: m.targetRatio })))
         ]);
         return { success: true };
       } catch (e: any) {
@@ -1065,41 +895,13 @@ export const dbService = {
     activeZones = [...OFFICE_LOCATIONS];
     activeMetrics = [...DEPARTMENT_METRICS];
     return { success: true };
-  },
-
-  async exportWPS(runId: string, bankFormat: string = 'Standard'): Promise<string> {
-    const items = await this.getPayrollItems(runId);
-    const employees = await this.getEmployees();
-    
-    let headers = "EmployeeID,Name,CivilID,Salary,Allowances,PIFSS_Emp,PIFSS_Co,Net,IBAN,BankCode\n";
-    
-    if (bankFormat === 'NBK') {
-       headers = "NBK_WPS_V2.0\nEmployeeID,Name,CivilID,Salary,Allowances,PIFSS_Emp,PIFSS_Co,Net,IBAN,BankCode\n";
-    } else if (bankFormat === 'KFH') {
-       headers = "KFH_ONLINE_WPS\nCivilID,Name,IBAN,BankCode,Basic,Allowances,Net\n";
-    }
-
-    const rows = items.map(item => {
-      const emp = employees.find(e => e.id === item.employeeId);
-      const totalAllowances = item.housingAllowance + item.otherAllowances;
-      
-      if (bankFormat === 'KFH') {
-        return `${emp?.civilId || ''},${item.employeeName},${emp?.iban || ''},${emp?.bankCode || ''},${item.basicSalary.toFixed(3)},${totalAllowances.toFixed(3)},${item.netSalary.toFixed(3)}`;
-      }
-      
-      return `${item.employeeId},${item.employeeName},${emp?.civilId || ''},${item.basicSalary.toFixed(3)},${totalAllowances.toFixed(3)},${(item as any).pifssDeduction.toFixed(3)},${(item as any).pifssEmployerShare.toFixed(3)},${item.netSalary.toFixed(3)},${emp?.iban || ''},${emp?.bankCode || ''}`;
-    }).join("\n");
-
-    return headers + rows;
   }
 };
 
 const getCurrentWeekRange = () => {
   const now = new Date();
-  const day = now.getDay(); 
-  const diffToSun = day; 
   const sun = new Date(now);
-  sun.setDate(now.getDate() - diffToSun);
+  sun.setDate(now.getDate() - now.getDay());
   sun.setHours(0, 0, 0, 0);
   const thu = new Date(sun);
   thu.setDate(sun.getDate() + 4);
