@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-/* Added comment above fix */
-/* Fix: Initializing GoogleGenAI with API key from process.env.API_KEY directly as per mandatory guidelines and to resolve TypeScript 'ImportMeta' errors */
+// Strictly using process.env.API_KEY as per mandatory initialization rules
+// In Vite/Docker, this is injected via the 'define' block in vite.config.ts
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const ADMIN_SYSTEM_INSTRUCTION = `You are an expert HR Operations Admin Assistant. Your primary mission is to ensure data integrity, record accuracy, and compliance within the HR portal. Always prioritize GDPR and data privacy. Before suggesting any data modification, verify if an audit trail is required. If data is ambiguous, ask clarifying questions rather than guessing. You communicate professionally and concisely.`;
@@ -47,8 +47,8 @@ export const getKuwaitizationInsights = async (employeeData: string) => {
   } catch (error) {
     console.error("Gemini Insight Error:", error);
     return {
-      summary: "Intelligence engine is currently offline or the API key is missing from your local .env file.",
-      recommendations: ["Ensure API_KEY is provided in the Docker build args.", "Verify Supabase connectivity for data analysis."],
+      summary: "Intelligence engine is currently offline or the API key is missing from your local build environment.",
+      recommendations: ["Ensure API_KEY is provided as a build-arg in Docker.", "Verify Supabase connectivity for data analysis."],
       complianceStatus: "Warning"
     };
   }
