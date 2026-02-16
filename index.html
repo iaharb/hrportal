@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -19,7 +18,8 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🇰🇼</text></svg>">
   
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800;900&family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Enhanced Font Stack: Added Tajawal and Alexandria for Premium Kuwaiti UI look -->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&family=Tajawal:wght@200;300;400;500;700;800;900&family=Alexandria:wght@100;200;300;400;500;600;700;800;900&family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   
   <style>
     :root {
@@ -38,9 +38,16 @@
       -moz-osx-font-smoothing: grayscale;
     }
     
-    /* Stronger RTL font enforcement with local fallbacks */
+    /* Premium RTL font enforcement with high-end stack */
     [dir="rtl"], [dir="rtl"] * {
-      font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif !important;
+      font-family: 'Alexandria', 'Tajawal', 'Cairo', sans-serif !important;
+      letter-spacing: 0 !important;
+      word-spacing: normal !important;
+    }
+
+    /* Adjusting line height for Arabic specifically to prevent glyph clipping */
+    [dir="rtl"] p, [dir="rtl"] span, [dir="rtl"] h1, [dir="rtl"] h2, [dir="rtl"] h3 {
+      line-height: 1.6;
     }
 
     /* Premium SaaS Components */
