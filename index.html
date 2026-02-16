@@ -5,20 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Enterprise HR | Intelligence Portal</title>
   
-  <!-- Web App Manifest -->
   <link rel="manifest" href="manifest.json">
-  
-  <!-- Mobile UI Meta Tags -->
   <meta name="theme-color" content="#4f46e5">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Enterprise HR">
-  <meta name="mobile-web-app-capable" content="yes">
-
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🇰🇼</text></svg>">
   
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Enhanced Font Stack: Added Tajawal and Alexandria for Premium Kuwaiti UI look -->
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&family=Tajawal:wght@200;300;400;500;700;800;900&family=Alexandria:wght@100;200;300;400;500;600;700;800;900&family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   
   <style>
@@ -36,21 +29,25 @@
       color: var(--brand-slate);
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
     }
     
-    /* Premium RTL font enforcement with high-end stack */
+    /* Strong Enterprise Font Enforcement for Arabic */
     [dir="rtl"], [dir="rtl"] * {
       font-family: 'Alexandria', 'Tajawal', 'Cairo', sans-serif !important;
       letter-spacing: 0 !important;
       word-spacing: normal !important;
     }
 
-    /* Adjusting line height for Arabic specifically to prevent glyph clipping */
+    /* Target specific weights for the 'Enterprise' look */
+    [dir="rtl"] .font-black { font-weight: 900 !important; }
+    [dir="rtl"] .font-extrabold { font-weight: 800 !important; }
+    [dir="rtl"] .font-bold { font-weight: 700 !important; }
+
     [dir="rtl"] p, [dir="rtl"] span, [dir="rtl"] h1, [dir="rtl"] h2, [dir="rtl"] h3 {
-      line-height: 1.6;
+      line-height: 1.65;
     }
 
-    /* Premium SaaS Components */
     .saas-card {
       background: #ffffff;
       border: 1px solid rgba(226, 232, 240, 0.7);
@@ -64,14 +61,6 @@
       transform: translateY(-2px);
     }
 
-    .glass-header {
-      background: rgba(248, 250, 252, 0.8);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(226, 232, 240, 0.8);
-    }
-
-    /* Advanced Mesh Gradient */
     .bg-mesh {
       background-color: #f8fafc;
       background-image: 
@@ -81,7 +70,6 @@
         radial-gradient(at 0% 100%, hsla(243, 75%, 59%, 0.03) 0px, transparent 50%);
     }
 
-    /* Custom Ticker - Extreme Slow Speed for readability */
     @keyframes ticker-slide {
       0% { transform: translateX(100%); }
       100% { transform: translateX(-250%); }
@@ -92,29 +80,10 @@
       min-width: 100%;
     }
 
-    /* Input Styling */
-    input, select, textarea {
-      transition: all 0.2s ease;
-    }
-    input:focus, select:focus, textarea:focus {
-      box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.08);
-      border-color: #4f46e5 !important;
-    }
-
-    /* Smooth Scrollbar */
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
     ::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
-
-    /* Chart Tooltip Customization */
-    .recharts-default-tooltip {
-      border: 1px solid #f1f5f9 !important;
-      border-radius: 12px !important;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05) !important;
-      background-color: white !important;
-      padding: 12px !important;
-    }
   </style>
   <script>
     window.process = window.process || { env: {} };
