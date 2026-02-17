@@ -18,4 +18,4 @@ services:
 
 networks:
   hrms-network:
-    external: true # Assumes your Supabase container is already on this network
+    driver: bridge
